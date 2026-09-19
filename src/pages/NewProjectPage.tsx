@@ -1,10 +1,11 @@
+import { useMutation, useQuery } from "convex/react";
 import { FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useMutation } from "convex/react";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 
 export function NewProjectPage() {
   const navigate = useNavigate();
+  const viewer = useQuery(api.users.viewer);
   const createProject = useMutation(api.projects.create);
   const [intent, setIntent] = useState(
     "Convert my detached garage into an ADU",
@@ -14,6 +15,18 @@ export function NewProjectPage() {
   );
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  if (viewer === null) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  if (viewer === undefined) {
+    return (
+      <div className="shell">
+        <p className="muted">Checking session...</p>
+      </div>
+    );
+  }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -42,8 +55,8 @@ export function NewProjectPage() {
       <main className="panel" style={{ maxWidth: "720px" }}>
         <h2>What are you trying to build?</h2>
         <p className="muted">
-          Start with natural language. Greenlight resolves jurisdiction and
-          compiles your permit graph.
+          Start with natural language. Greenlight resolves jurisdiction, crawls
+          official sources, and compiles your permit graph.
         </p>
 
         <form className="form-grid" onSubmit={onSubmit}>

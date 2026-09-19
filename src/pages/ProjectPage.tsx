@@ -1,15 +1,41 @@
+import { useMutation, useQuery } from "convex/react";
+import { FormEvent, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { stageLabel, statusClass, statusLabel } from "../lib/status";
 
 export function ProjectPage() {
   const { projectId } = useParams();
+  const typedProjectId = projectId as Id<"projects">;
   const data = useQuery(
     api.projects.get,
-    projectId ? { projectId: projectId as Id<"projects"> } : "skip",
+    projectId ? { projectId: typedProjectId } : "skip",
   );
+  const sources = useQuery(
+    api.sources.listForProject,
+    projectId ? { projectId: typedProjectId } : "skip",
+  );
+  const documents = useQuery(
+    api.documents.listForProject,
+    projectId ? { projectId: typedProjectId } : "skip",
+  );
+  const communications = useQuery(
+    api.communications.listForProject,
+    projectId ? { projectId: typedProjectId } : "skip",
+  );
+  const approvals = useQuery(
+    api.approvals.listPending,
+    projectId ? { projectId: typedProjectId } : "skip",
+  );
+
+  const generateUploadUrl = useMutation(api.documents.generateUploadUrl);
+  const saveUploaded = useMutation(api.documents.saveUploaded);
+  const approveDraft = useMutation(api.approvals.approve);
+  const rejectDraft = useMutation(api.approvals.reject);
+
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   if (data === undefined) {
     return (
@@ -36,6 +62,47 @@ export function ProjectPage() {
     (a, b) => a.sortOrder - b.sortOrder,
   );
 
+  async function onUpload(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!projectId) {
+      return;
+    }
+
+    const form = event.currentTarget;
+    const fileInput = form.elements.namedItem("file") as HTMLInputElement;
+    const typeInput = form.elements.namedItem("documentType") as HTMLSelectElement;
+    const file = fileInput.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const uploadUrl = await generateUploadUrl({});
+      const result = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      const { storageId } = (await result.json()) as { storageId: Id<"_storage"> };
+      await saveUploaded({
+        projectId: typedProjectId,
+        storageId,
+        filename: file.name,
+        mimeType: file.type || "application/octet-stream",
+        documentType: typeInput.value,
+      });
+      form.reset();
+    } catch (caught) {
+      setUploadError(
+        caught instanceof Error ? caught.message : "Upload failed.",
+      );
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <div className="shell">
       <header className="topbar">
@@ -50,7 +117,8 @@ export function ProjectPage() {
 
       {project.status === "compiling" ? (
         <div className="compiling-banner" style={{ marginBottom: "1rem" }}>
-          Compiling project. Stages and events update live as the compiler runs.
+          Compiling project. Stages, sources, and events update live as the
+          compiler runs.
         </div>
       ) : null}
 
@@ -66,6 +134,11 @@ export function ProjectPage() {
           <div>
             <h2 style={{ marginBottom: "0.35rem" }}>{project.title}</h2>
             <p className="muted" style={{ margin: 0 }}>{project.intent}</p>
+            {project.inboxEmail ? (
+              <p className="mono muted" style={{ marginTop: "0.75rem" }}>
+                Project inbox: {project.inboxEmail}
+              </p>
+            ) : null}
           </div>
           <div>
             <div className="muted mono">Permit readiness</div>
@@ -88,9 +161,6 @@ export function ProjectPage() {
               </span>
             </div>
           ))}
-          {sortedRequirements.length === 0 ? (
-            <p className="muted">Requirements appear after compilation.</p>
-          ) : null}
         </aside>
 
         <section className="stack">
@@ -107,16 +177,73 @@ export function ProjectPage() {
           </div>
 
           <div className="panel">
-            <h3>Property resolution</h3>
-            <div className="stack mono">
-              <div>Address: {project.normalizedAddress ?? project.address}</div>
-              <div>
-                Jurisdiction: {project.jurisdiction ?? "Pending / unsupported"}
+            <h3>Official sources</h3>
+            {sources?.sources.map((source) => {
+              const snapshot = sources.snapshots.find(
+                (item) => item.sourceId === source._id,
+              );
+              return (
+                <div className="requirement-row" key={source._id}>
+                  <div>
+                    <div>{source.label}</div>
+                    <a
+                      className="mono muted"
+                      href={source.url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {source.authority}
+                    </a>
+                    {snapshot ? (
+                      <p className="muted" style={{ marginBottom: 0 }}>
+                        {snapshot.title ?? "Snapshot retrieved"} · hash{" "}
+                        {snapshot.contentHash.slice(0, 10)}
+                      </p>
+                    ) : (
+                      <p className="muted" style={{ marginBottom: 0 }}>
+                        Snapshot pending
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="panel">
+            <h3>Documents</h3>
+            <form className="form-grid" onSubmit={onUpload}>
+              <label>
+                Document type
+                <select name="documentType" defaultValue="site_plan">
+                  <option value="site_plan">Site plan</option>
+                  <option value="survey">Survey</option>
+                  <option value="structural">Structural calculations</option>
+                  <option value="existing_plans">Existing plans</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <label>
+                File
+                <input name="file" type="file" required />
+              </label>
+              {uploadError ? <p className="error">{uploadError}</p> : null}
+              <button
+                className="button button-primary"
+                type="submit"
+                disabled={uploading}
+              >
+                {uploading ? "Uploading..." : "Upload evidence"}
+              </button>
+            </form>
+            {documents?.map((document) => (
+              <div className="event-row" key={document._id}>
+                <div>
+                  <div>{document.filename}</div>
+                  <div className="muted mono">{document.documentType}</div>
+                </div>
               </div>
-              <div>City: {project.city ?? "—"}</div>
-              <div>County: {project.county ?? "—"}</div>
-              <div>State: {project.state ?? "—"}</div>
-            </div>
+            ))}
           </div>
 
           {project.primaryBlocker ? (
@@ -127,7 +254,9 @@ export function ProjectPage() {
                 <p className="muted">{project.primaryBlockerReason}</p>
               ) : null}
               {project.primaryBlockerSource ? (
-                <p className="mono muted">Source: {project.primaryBlockerSource}</p>
+                <p className="mono muted">
+                  Source: {project.primaryBlockerSource}
+                </p>
               ) : null}
             </div>
           ) : null}
@@ -136,12 +265,59 @@ export function ProjectPage() {
         <aside className="panel stack">
           <h3>Next action</h3>
           <p>{project.nextAction ?? "Waiting for compiler output."}</p>
-          <div className="mono muted">
-            <div>Requirements: {project.requirementCount}</div>
-            <div>Blockers: {project.blockerCount}</div>
-            <div>Unknown: {project.unknownCount}</div>
-            <div>Permit path stages: {project.permitPathStages}</div>
-          </div>
+
+          <h3>Pending approvals</h3>
+          {approvals?.length ? (
+            approvals.map((approval) => (
+              <div className="panel" key={approval._id} style={{ padding: "0.85rem" }}>
+                <div className="mono">{approval.subject}</div>
+                <pre
+                  style={{
+                    whiteSpace: "pre-wrap",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "0.78rem",
+                  }}
+                >
+                  {approval.body}
+                </pre>
+                <div className="cta-row">
+                  <button
+                    className="button button-primary"
+                    type="button"
+                    onClick={() => approveDraft({ approvalId: approval._id })}
+                  >
+                    Approve & send
+                  </button>
+                  <button
+                    className="button button-secondary"
+                    type="button"
+                    onClick={() => rejectDraft({ approvalId: approval._id })}
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="muted">No pending approvals.</p>
+          )}
+
+          <h3>Inbox</h3>
+          {communications?.length ? (
+            communications.map((message) => (
+              <div className="event-row" key={message._id}>
+                <div>
+                  <div className="mono">
+                    {message.direction} · {message.status}
+                  </div>
+                  <div>{message.subject}</div>
+                  <div className="muted">{message.body.slice(0, 180)}</div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="muted">No correspondence yet.</p>
+          )}
 
           <h3>Event stream</h3>
           {events.map((event) => (
@@ -152,9 +328,6 @@ export function ProjectPage() {
               </div>
             </div>
           ))}
-          {events.length === 0 ? (
-            <p className="muted">No events yet.</p>
-          ) : null}
         </aside>
       </div>
     </div>

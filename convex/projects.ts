@@ -1,9 +1,11 @@
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { internalMutation, mutation, query } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { getCurrentUser, requireProjectAccess } from "./lib/auth";
 import { appendEvent, seedCompilerStages } from "./lib/compiler";
+import { seedInitialRequirements } from "./lib/requirements";
 
 const projectStatusValidator = v.union(
   v.literal("draft"),
@@ -15,6 +17,7 @@ const projectStatusValidator = v.union(
 const projectSummaryValidator = v.object({
   _id: v.id("projects"),
   _creationTime: v.number(),
+  userId: v.id("users"),
   title: v.string(),
   intent: v.string(),
   address: v.string(),
@@ -35,6 +38,8 @@ const projectSummaryValidator = v.object({
   primaryBlocker: v.optional(v.string()),
   primaryBlockerReason: v.optional(v.string()),
   primaryBlockerSource: v.optional(v.string()),
+  inboxId: v.optional(v.string()),
+  inboxEmail: v.optional(v.string()),
   createdAt: v.number(),
   updatedAt: v.number(),
 });
@@ -69,6 +74,7 @@ const requirementValidator = v.object({
   authority: v.optional(v.string()),
   sourceLabel: v.optional(v.string()),
   sourceUrl: v.optional(v.string()),
+  sourceId: v.optional(v.id("sources")),
   evidenceRequired: v.optional(v.string()),
   blockedReason: v.optional(v.string()),
   sortOrder: v.number(),
@@ -121,11 +127,13 @@ export const list = query({
   args: {},
   returns: v.array(projectSummaryValidator),
   handler: async (ctx) => {
-    return await ctx.db
+    const user = await getCurrentUser(ctx);
+    const projects = await ctx.db
       .query("projects")
-      .withIndex("by_status")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
       .order("desc")
       .take(50);
+    return projects;
   },
 });
 
@@ -141,10 +149,7 @@ export const get = query({
     v.null(),
   ),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get("projects", args.projectId);
-    if (!project) {
-      return null;
-    }
+    const { project } = await requireProjectAccess(ctx, args.projectId);
 
     const stages = await ctx.db
       .query("compilerStages")
@@ -160,14 +165,9 @@ export const get = query({
       .query("projectEvents")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .order("desc")
-      .take(30);
+      .take(40);
 
-    return {
-      project,
-      stages,
-      requirements,
-      events,
-    };
+    return { project, stages, requirements, events };
   },
 });
 
@@ -178,6 +178,7 @@ export const create = mutation({
   },
   returns: v.id("projects"),
   handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
     const intent = args.intent.trim();
     const address = args.address.trim();
 
@@ -193,6 +194,7 @@ export const create = mutation({
     const title = deriveTitle(intent, address);
 
     const projectId = await ctx.db.insert("projects", {
+      userId: user._id,
       title,
       intent,
       address,
@@ -220,11 +222,61 @@ export const create = mutation({
       "Compiler run queued for property resolution.",
     );
 
-    await ctx.scheduler.runAfter(0, internal.projects.runCompiler, {
+    await ctx.scheduler.runAfter(0, internal.integrations.agentmailActions.provisionProjectInbox, {
       projectId,
     });
+    await ctx.scheduler.runAfter(0, internal.projects.runCompiler, { projectId });
 
     return projectId;
+  },
+});
+
+export const getInternal = internalQuery({
+  args: { projectId: v.id("projects") },
+  returns: v.union(projectSummaryValidator, v.null()),
+  handler: async (ctx, args) => {
+    return await ctx.db.get("projects", args.projectId);
+  },
+});
+
+export const getByInboxInternal = internalQuery({
+  args: { inboxId: v.string() },
+  returns: v.union(projectSummaryValidator, v.null()),
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("projects")
+      .withIndex("by_inbox", (q) => q.eq("inboxId", args.inboxId))
+      .unique();
+  },
+});
+
+export const setInboxInternal = internalMutation({
+  args: {
+    projectId: v.id("projects"),
+    inboxId: v.string(),
+    inboxEmail: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch("projects", args.projectId, {
+      inboxId: args.inboxId,
+      inboxEmail: args.inboxEmail,
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+export const appendEventInternal = internalMutation({
+  args: {
+    projectId: v.id("projects"),
+    type: v.string(),
+    message: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await appendEvent(ctx, args.projectId, args.type, args.message);
+    return null;
   },
 });
 
@@ -279,8 +331,20 @@ export const runCompiler = internalMutation({
         }
       }
 
+      if (stage.stageKey === "authority_sources" && resolvedJurisdiction) {
+        await ctx.runMutation(internal.sources.seedOfficialSources, {
+          projectId: args.projectId,
+        });
+        await ctx.scheduler.runAfter(
+          0,
+          internal.integrations.firecrawlActions.scrapeProjectSources,
+          { projectId: args.projectId },
+        );
+      }
+
       if (stage.stageKey === "dependency_graph" && resolvedJurisdiction) {
-        await seedInitialRequirements(ctx, args.projectId);
+        const sourceIds = await buildSourceIdMap(ctx, args.projectId);
+        await seedInitialRequirements(ctx, args.projectId, sourceIds);
       }
 
       await ctx.db.patch("compilerStages", stage._id, { status: "complete" });
@@ -292,144 +356,93 @@ export const runCompiler = internalMutation({
       );
     }
 
-    const requirements = await ctx.db
-      .query("requirements")
-      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-      .collect();
-
-    const blockerCount = requirements.filter((r) => r.status === "blocked").length;
-    const reviewCount = requirements.filter((r) => r.status === "review").length;
-    const missingCount = requirements.filter((r) => r.status === "missing").length;
-    const verifiedCount = requirements.filter((r) => r.status === "verified").length;
-    const total = requirements.length;
-    const readinessPercent =
-      total === 0 ? 0 : Math.round((verifiedCount / total) * 100);
-
-    const primary = requirements.find((r) => r.isPrimaryBlocker);
-
-    await ctx.db.patch("projects", args.projectId, {
-      status: "active",
-      readinessPercent,
-      permitPathStages: 4,
-      requirementCount: total,
-      blockerCount,
-      unknownCount: reviewCount,
-      nextAction:
-        missingCount > 0
-          ? "Upload missing evidence for open requirements."
-          : "Review primary blocker and next agency action.",
-      primaryBlocker: primary?.title,
-      primaryBlockerReason: primary?.blockedReason,
-      primaryBlockerSource: primary?.sourceLabel,
-      updatedAt: Date.now(),
-    });
-
-    await appendEvent(
-      ctx,
-      args.projectId,
-      "compiler.complete",
-      `Project compiled. Readiness ${readinessPercent}%.`,
-    );
-
+    await finalizeProject(ctx, args.projectId);
     return null;
   },
 });
 
-async function seedInitialRequirements(
+async function buildSourceIdMap(
   ctx: MutationCtx,
   projectId: Id<"projects">,
-) {
-  const existing = await ctx.db
+): Promise<Map<string, Id<"sources">>> {
+  const sources = await ctx.db
+    .query("sources")
+    .withIndex("by_project", (q) => q.eq("projectId", projectId))
+    .collect();
+
+  const map = new Map<string, Id<"sources">>();
+  for (const source of sources) {
+    map.set(source.key, source._id);
+  }
+  return map;
+}
+
+async function finalizeProject(ctx: MutationCtx, projectId: Id<"projects">) {
+  const requirements = await ctx.db
     .query("requirements")
     .withIndex("by_project", (q) => q.eq("projectId", projectId))
-    .take(1);
+    .collect();
 
-  if (existing.length > 0) {
-    return;
-  }
+  const blockerCount = requirements.filter((r) => r.status === "blocked").length;
+  const reviewCount = requirements.filter((r) => r.status === "review").length;
+  const missingCount = requirements.filter((r) => r.status === "missing").length;
+  const verifiedCount = requirements.filter((r) => r.status === "verified").length;
+  const total = requirements.length;
+  const readinessPercent =
+    total === 0 ? 0 : Math.round((verifiedCount / total) * 100);
 
-  const rows = [
-    {
-      title: "Property identity",
-      category: "property",
-      status: "verified" as const,
-      authority: "City of Los Angeles",
-      sourceLabel: "LADBS property lookup",
-      sourceUrl: "https://www.ladbsservices2.lacity.org/",
-      sortOrder: 1,
-      isPrimaryBlocker: false,
-    },
-    {
-      title: "Zoning designation",
-      category: "zoning",
-      status: "verified" as const,
-      authority: "City Planning",
-      sourceLabel: "ZIMAS",
-      sourceUrl: "https://zimas.lacity.org/",
-      sortOrder: 2,
-      isPrimaryBlocker: false,
-    },
-    {
-      title: "Rear setback applicability",
-      category: "setback",
-      status: "blocked" as const,
-      authority: "City Planning",
-      sourceLabel: "ADU ordinance guidance",
-      sourceUrl: "https://planning.lacity.gov/",
-      blockedReason:
-        "Official guidance and current project configuration require clarification.",
-      sortOrder: 3,
-      isPrimaryBlocker: true,
-    },
-    {
-      title: "Building height limit",
-      category: "height",
-      status: "verified" as const,
-      authority: "City Planning",
-      sourceLabel: "Municipal code height district",
-      sortOrder: 4,
-      isPrimaryBlocker: false,
-    },
-    {
-      title: "Site plan",
-      category: "site_plan",
-      status: "review" as const,
-      authority: "LADBS Plan Check",
-      evidenceRequired: "Scaled site plan with existing and proposed structures",
-      sortOrder: 5,
-      isPrimaryBlocker: false,
-    },
-    {
-      title: "Structural calculations",
-      category: "structural",
-      status: "missing" as const,
-      authority: "LADBS",
-      evidenceRequired: "Engineering calcs for new or modified load-bearing elements",
-      sortOrder: 6,
-      isPrimaryBlocker: false,
-    },
-    {
-      title: "Building permit application",
-      category: "permit",
-      status: "locked" as const,
-      authority: "LADBS",
-      blockedReason: "Unlocks after open plan-check requirements are satisfied.",
-      sortOrder: 7,
-      isPrimaryBlocker: false,
-    },
-  ];
+  const primary = requirements.find((r) => r.isPrimaryBlocker);
 
-  for (const row of rows) {
-    await ctx.db.insert("requirements", {
-      projectId,
-      ...row,
-    });
-  }
+  await ctx.db.patch("projects", projectId, {
+    status: "active",
+    readinessPercent,
+    permitPathStages: 4,
+    requirementCount: total,
+    blockerCount,
+    unknownCount: reviewCount,
+    nextAction:
+      missingCount > 0
+        ? "Upload missing evidence for open requirements."
+        : "Review primary blocker and draft agency clarification.",
+    primaryBlocker: primary?.title,
+    primaryBlockerReason: primary?.blockedReason,
+    primaryBlockerSource: primary?.sourceLabel,
+    updatedAt: Date.now(),
+  });
 
   await appendEvent(
     ctx,
     projectId,
-    "requirements.seeded",
-    `Structured ${rows.length} requirements from LA ADU pathway template.`,
+    "compiler.complete",
+    `Project compiled. Readiness ${readinessPercent}%.`,
   );
+
+  if (primary) {
+    await ctx.db.insert("approvals", {
+      projectId,
+      actionType: "send_clarification_email",
+      subject: `Clarification request: ${primary.title}`,
+      body: [
+        "Hello Planning Department,",
+        "",
+        `We are preparing a residential ADU project and need clarification on ${primary.title.toLowerCase()}.`,
+        "",
+        primary.blockedReason ?? "Please confirm the applicable requirement for this site.",
+        "",
+        "Thank you,",
+        "Greenlight project team",
+      ].join("\n"),
+      toAddresses: ["planning.correspondence@lacity.org"],
+      requirementId: primary._id,
+      status: "pending",
+      requestedAt: Date.now(),
+    });
+
+    await appendEvent(
+      ctx,
+      projectId,
+      "approval.requested",
+      "Draft clarification email prepared for human approval.",
+    );
+  }
 }

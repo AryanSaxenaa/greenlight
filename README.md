@@ -20,6 +20,17 @@ npx convex dev
 npm run dev
 ```
 
+### Required deployment environment variables
+
+Set these with `npx convex env set` after `npx convex dev`:
+
+- `JWT_PRIVATE_KEY`, `JWKS`, and `SITE_URL` for Convex Auth
+- `FIRECRAWL_API_KEY` for official source scraping
+- `AGENTMAIL_API_KEY` for project inboxes and outbound mail
+- `AGENTMAIL_WEBHOOK_SECRET` for inbound webhook verification
+
+See `.env.example` for the full list.
+
 ## Project docs
 
 - `PlanGreenlight.md` — product specification

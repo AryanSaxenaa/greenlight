@@ -1,6 +1,10 @@
+import { useQuery } from "convex/react";
 import { Link } from "react-router-dom";
+import { api } from "../../convex/_generated/api";
 
 export function LandingPage() {
+  const viewer = useQuery(api.users.viewer);
+
   return (
     <div className="shell">
       <header className="topbar">
@@ -8,6 +12,9 @@ export function LandingPage() {
           <span className="brand-mark" aria-hidden="true" />
           <span>GREENLIGHT</span>
         </div>
+        <Link className="button button-secondary" to={viewer ? "/projects/new" : "/auth"}>
+          {viewer ? "New project" : "Sign in"}
+        </Link>
       </header>
 
       <main className="hero">
@@ -17,7 +24,10 @@ export function LandingPage() {
           identifies blockers, and manages the path to approval.
         </p>
         <div className="cta-row">
-          <Link className="button button-primary" to="/projects/new">
+          <Link
+            className="button button-primary"
+            to={viewer ? "/projects/new" : "/auth"}
+          >
             Start a project
           </Link>
           <a
