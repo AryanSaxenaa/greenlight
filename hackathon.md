@@ -28,5 +28,5 @@ Added Convex Auth password sign-in, user-scoped projects, official LA source reg
 ### 2026-09-19 - fd7a013
 Added requirement extraction from scraped official sources, Firecrawl monitor webhook handling with re-evaluation, document fact extraction with evidence-to-requirement mapping, Svix webhook verification for AgentMail, and inbound email-to-requirement linking (`convex/requirements.ts`, `convex/integrations/firecrawlWebhook.ts`, `convex/integrations/documentActions.ts`, `convex/lib/*`).
 
-### 2026-09-19 - working tree
+### 2026-09-19 - f3cd9c8
 Addressed PlanGreenlight audit gaps: evidence discipline on requirements, real compiler stage sequencing, full snapshot storage, dependency graph, change impact compiler, inbound email decision extraction, fact-based clarification drafts, readiness recomputation, agent run logging, and expanded control room UI.
