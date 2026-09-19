@@ -1,0 +1,260 @@
+:root {
+  color-scheme: dark;
+  --bg: #0d1110;
+  --bg-elevated: #141a18;
+  --bg-panel: #1a221f;
+  --border: rgba(168, 198, 176, 0.14);
+  --text: #e8efe9;
+  --text-muted: #8fa193;
+  --accent: #5fd38d;
+  --accent-dim: rgba(95, 211, 141, 0.16);
+  --warn: #f0b35a;
+  --danger: #f07178;
+  --info: #7eb6ff;
+  --locked: #6b7280;
+  --font-sans: "DM Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background:
+    radial-gradient(circle at top left, rgba(95, 211, 141, 0.08), transparent 28%),
+    var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.shell {
+  width: min(1120px, calc(100% - 2rem));
+  margin: 0 auto;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 0 2rem;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.brand-mark {
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 2px solid var(--accent);
+  transform: rotate(45deg);
+}
+
+.hero {
+  padding: 4rem 0 5rem;
+}
+
+.hero h1 {
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  line-height: 1.02;
+  margin: 0 0 1rem;
+  max-width: 12ch;
+}
+
+.hero p {
+  max-width: 48ch;
+  color: var(--text-muted);
+  font-size: 1.125rem;
+  margin: 0 0 2rem;
+}
+
+.cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.button {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0.85rem 1.25rem;
+  font-weight: 600;
+  transition: transform 120ms ease, background 120ms ease;
+}
+
+.button:hover {
+  transform: translateY(-1px);
+}
+
+.button-primary {
+  background: var(--accent);
+  color: #07130d;
+}
+
+.button-secondary {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  padding: 1.25rem;
+}
+
+.panel h2,
+.panel h3 {
+  margin-top: 0;
+}
+
+.form-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+label {
+  display: grid;
+  gap: 0.45rem;
+  font-size: 0.92rem;
+  color: var(--text-muted);
+}
+
+input,
+textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  border-radius: 0.75rem;
+  padding: 0.85rem 1rem;
+}
+
+textarea {
+  min-height: 7rem;
+  resize: vertical;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.status-verified {
+  background: rgba(95, 211, 141, 0.14);
+  color: var(--accent);
+}
+
+.status-blocked {
+  background: rgba(240, 113, 120, 0.14);
+  color: var(--danger);
+}
+
+.status-review {
+  background: rgba(240, 179, 90, 0.14);
+  color: var(--warn);
+}
+
+.status-missing {
+  background: rgba(126, 182, 255, 0.14);
+  color: var(--info);
+}
+
+.status-locked {
+  background: rgba(107, 114, 128, 0.18);
+  color: var(--locked);
+}
+
+.project-layout {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 960px) {
+  .project-layout {
+    grid-template-columns: 260px 1fr 280px;
+  }
+}
+
+.stack {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.requirement-row,
+.stage-row,
+.event-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.requirement-row:last-child,
+.stage-row:last-child,
+.event-row:last-child {
+  border-bottom: none;
+}
+
+.readiness {
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.error {
+  color: var(--danger);
+}
+
+.compiling-banner {
+  border: 1px solid rgba(95, 211, 141, 0.35);
+  background: var(--accent-dim);
+  border-radius: 0.85rem;
+  padding: 0.85rem 1rem;
+}
