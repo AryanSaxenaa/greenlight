@@ -25,5 +25,5 @@ Scaffolded the Greenlight hackathon app on React + Vite with Convex backend tabl
 ### 2026-09-19 - 7a8de82
 Added Convex Auth password sign-in, user-scoped projects, official LA source registry with Firecrawl scraping, Convex file storage for evidence uploads, AgentMail inbox provisioning, inbound webhook handling, outbound clarification approvals, and expanded project UI for sources, documents, inbox, and approvals (`convex/auth.ts`, `convex/integrations/*`, `convex/documents.ts`, `convex/communications.ts`, `convex/approvals.ts`, `convex/http.ts`).
 
-### 2026-09-19 - working tree
+### 2026-09-19 - fd7a013
 Added requirement extraction from scraped official sources, Firecrawl monitor webhook handling with re-evaluation, document fact extraction with evidence-to-requirement mapping, Svix webhook verification for AgentMail, and inbound email-to-requirement linking (`convex/requirements.ts`, `convex/integrations/firecrawlWebhook.ts`, `convex/integrations/documentActions.ts`, `convex/lib/*`).
