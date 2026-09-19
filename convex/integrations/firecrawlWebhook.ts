@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { internal } from "../_generated/api";
 import { internalMutation } from "../_generated/server";
 import { appendEvent } from "../lib/compiler";
 
@@ -10,6 +11,7 @@ export const processMonitorPage = internalMutation({
     changeSummary: v.string(),
     contentHash: v.optional(v.string()),
     markdownPreview: v.optional(v.string()),
+    storageId: v.optional(v.id("_storage")),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -30,32 +32,21 @@ export const processMonitorPage = internalMutation({
         title: source.label,
         contentHash: args.contentHash,
         markdownPreview: args.markdownPreview,
+        storageId: args.storageId,
         changeStatus: "changed",
       });
 
       await ctx.db.patch("sources", source._id, {
         lastScrapedAt: Date.now(),
+        lastChangedAt: Date.now(),
+        healthStatus: "current",
       });
-    }
 
-    if (args.status === "changed") {
-      const requirements = await ctx.db
-        .query("requirements")
-        .withIndex("by_project", (q) => q.eq("projectId", source.projectId))
-        .collect();
-
-      const affected = requirements.filter(
-        (requirement) => requirement.sourceId === source._id,
-      );
-
-      for (const requirement of affected) {
-        await ctx.db.patch("requirements", requirement._id, {
-          status: "review",
-          blockedReason: `Official source changed: ${args.changeSummary}`,
-          isPrimaryBlocker:
-            requirement.isPrimaryBlocker || requirement.category === "setback",
-        });
-      }
+      await ctx.runMutation(internal.requirements.reevaluateFromSourceChange, {
+        projectId: source.projectId,
+        sourceId: source._id,
+        changeSummary: args.changeSummary,
+      });
     }
 
     await appendEvent(
@@ -63,6 +54,7 @@ export const processMonitorPage = internalMutation({
       source.projectId,
       "source.monitor",
       `Monitor event for ${source.label}: ${args.status}. ${args.changeSummary}`,
+      { actorType: "source", actorLabel: source.label },
     );
 
     return null;

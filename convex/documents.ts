@@ -2,11 +2,12 @@ import { internal } from "./_generated/api";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { getCurrentUser, requireProjectAccess } from "./lib/auth";
-import { appendEvent } from "./lib/compiler";
+import { appendEvent, recomputeProjectMetrics } from "./lib/compiler";
 
 const factValidator = v.object({
   label: v.string(),
   value: v.string(),
+  confidence: v.optional(v.number()),
 });
 
 const documentValidator = v.object({
@@ -95,6 +96,7 @@ export const saveUploaded = mutation({
       args.projectId,
       "document.uploaded",
       `Uploaded ${args.documentType}: ${args.filename}.`,
+      { actorType: "user", actorLabel: user.email ?? "User" },
     );
 
     await ctx.db.patch("projects", project._id, {
@@ -123,7 +125,7 @@ export const applyExtractionInternal = internalMutation({
     documentId: v.id("documents"),
     projectId: v.id("projects"),
     facts: v.array(factValidator),
-    categories: v.array(v.string()),
+    nodeKeys: v.array(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -136,8 +138,8 @@ export const applyExtractionInternal = internalMutation({
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .collect();
 
-    for (const category of args.categories) {
-      const requirement = requirements.find((item) => item.category === category);
+    for (const nodeKey of args.nodeKeys) {
+      const requirement = requirements.find((item) => item.nodeKey === nodeKey);
       if (!requirement) {
         continue;
       }
@@ -148,29 +150,46 @@ export const applyExtractionInternal = internalMutation({
           documentId: args.documentId,
           requirementId: requirement._id,
           fact: `${fact.label}: ${fact.value}`,
-          confidence: 0.8,
+          confidence: fact.confidence ?? 0.8,
           createdAt: Date.now(),
         });
       }
+    }
 
+    for (const nodeKey of args.nodeKeys) {
+      const requirement = requirements.find((item) => item.nodeKey === nodeKey);
+      if (!requirement) {
+        continue;
+      }
       if (requirement.status === "missing") {
         await ctx.db.patch("requirements", requirement._id, {
           status: "review",
+          verificationStatus: "unverified",
         });
       }
+      if (nodeKey === "site_plan" && requirement.status === "review") {
+        const evidence = await ctx.db
+          .query("evidenceLinks")
+          .withIndex("by_requirement", (q) => q.eq("requirementId", requirement._id))
+          .take(2);
+        if (evidence.length >= 2) {
+          await ctx.db.patch("requirements", requirement._id, {
+            status: "verified",
+            verificationStatus: "known",
+          });
+        }
+      }
     }
+
+    await recomputeProjectMetrics(ctx, args.projectId);
 
     await appendEvent(
       ctx,
       args.projectId,
       "document.extracted",
       `Mapped ${args.facts.length} extracted facts to requirements.`,
+      { actorType: "agent", actorLabel: "Document extractor" },
     );
-
-    await ctx.db.patch("projects", args.projectId, {
-      nextAction: "Review uploaded evidence against open requirements.",
-      updatedAt: Date.now(),
-    });
 
     return null;
   },

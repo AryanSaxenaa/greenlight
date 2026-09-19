@@ -123,6 +123,7 @@ export const sendApprovedEmail = internalAction({
       toAddresses: approval.toAddresses,
       providerMessageId: payload.message_id,
       requirementId: approval.requirementId,
+      deliveryStatus: "delivered",
     });
 
     await ctx.runMutation(internal.projects.appendEventInternal, {

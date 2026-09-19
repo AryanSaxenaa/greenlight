@@ -55,8 +55,9 @@ export function NewProjectPage() {
       <main className="panel" style={{ maxWidth: "720px" }}>
         <h2>What are you trying to build?</h2>
         <p className="muted">
-          Start with natural language. Greenlight resolves jurisdiction, crawls
-          official sources, and compiles your permit graph.
+          Start with natural language. Los Angeles city addresses are supported
+          in this MVP. Greenlight resolves jurisdiction, crawls official
+          sources, and compiles your permit graph.
         </p>
 
         <form className="form-grid" onSubmit={onSubmit}>

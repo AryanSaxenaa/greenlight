@@ -2,31 +2,35 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { appendEvent } from "./lib/compiler";
+import { appendEvent, recomputeProjectMetrics } from "./lib/compiler";
+import { PERMIT_GRAPH_EDGES } from "./lib/dependencies";
 import {
   baseRequirements,
+  dedupeRequirements,
   extractRequirementsFromMarkdown,
   type ExtractedRequirement,
 } from "./lib/requirementExtraction";
+import { completeAgentRun, startAgentRun } from "./lib/agentRuns";
+
+const requirementListItem = v.object({
+  _id: v.id("requirements"),
+  title: v.string(),
+  category: v.string(),
+  nodeKey: v.string(),
+  status: v.union(
+    v.literal("verified"),
+    v.literal("blocked"),
+    v.literal("review"),
+    v.literal("missing"),
+    v.literal("locked"),
+  ),
+  blockedReason: v.optional(v.string()),
+  isPrimaryBlocker: v.boolean(),
+});
 
 export const listInternal = internalQuery({
   args: { projectId: v.id("projects") },
-  returns: v.array(
-    v.object({
-      _id: v.id("requirements"),
-      title: v.string(),
-      category: v.string(),
-      status: v.union(
-        v.literal("verified"),
-        v.literal("blocked"),
-        v.literal("review"),
-        v.literal("missing"),
-        v.literal("locked"),
-      ),
-      blockedReason: v.optional(v.string()),
-      isPrimaryBlocker: v.boolean(),
-    }),
-  ),
+  returns: v.array(requirementListItem),
   handler: async (ctx, args) => {
     const requirements = await ctx.db
       .query("requirements")
@@ -37,6 +41,7 @@ export const listInternal = internalQuery({
       _id: requirement._id,
       title: requirement.title,
       category: requirement.category,
+      nodeKey: requirement.nodeKey,
       status: requirement.status,
       blockedReason: requirement.blockedReason,
       isPrimaryBlocker: requirement.isPrimaryBlocker,
@@ -56,6 +61,14 @@ export const applyFromSnapshots = internalMutation({
     if (existing.length > 0) {
       return null;
     }
+
+    const runId = await startAgentRun(
+      ctx,
+      args.projectId,
+      "extract_requirements",
+      "compiler",
+      "Extracting structured requirements from official sources.",
+    );
 
     const sources = await ctx.db
       .query("sources")
@@ -85,11 +98,68 @@ export const applyFromSnapshots = internalMutation({
     const deduped = dedupeRequirements(extracted);
     await insertRequirements(ctx, args.projectId, deduped, sourceIds, sources);
 
+    await ctx.db.patch("projects", args.projectId, {
+      rulesExtracted: deduped.length,
+      updatedAt: Date.now(),
+    });
+
     await appendEvent(
       ctx,
       args.projectId,
       "requirements.extracted",
       `Extracted ${deduped.length} structured requirements from official sources.`,
+      { actorType: "agent", actorLabel: "Requirement extractor" },
+    );
+
+    await completeAgentRun(
+      ctx,
+      runId,
+      `Extracted ${deduped.length} requirements.`,
+    );
+
+    return null;
+  },
+});
+
+export const seedDependencies = internalMutation({
+  args: { projectId: v.id("projects") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("dependencies")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .take(1);
+
+    if (existing.length > 0) {
+      return null;
+    }
+
+    const requirements = await ctx.db
+      .query("requirements")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    const nodeKeys = new Set(requirements.map((requirement) => requirement.nodeKey));
+
+    for (const edge of PERMIT_GRAPH_EDGES) {
+      if (!nodeKeys.has(edge.fromNodeKey) || !nodeKeys.has(edge.toNodeKey)) {
+        continue;
+      }
+
+      await ctx.db.insert("dependencies", {
+        projectId: args.projectId,
+        fromNodeKey: edge.fromNodeKey,
+        toNodeKey: edge.toNodeKey,
+        relationship: edge.relationship,
+      });
+    }
+
+    await appendEvent(
+      ctx,
+      args.projectId,
+      "graph.compiled",
+      "Permit dependency graph compiled.",
+      { actorType: "agent", actorLabel: "Dependency compiler" },
     );
 
     return null;
@@ -109,6 +179,14 @@ export const reevaluateFromSourceChange = internalMutation({
       return null;
     }
 
+    const runId = await startAgentRun(
+      ctx,
+      args.projectId,
+      "recompile_requirements",
+      "source_monitor",
+      `Re-evaluating requirements after ${source.label} changed.`,
+    );
+
     const requirements = await ctx.db
       .query("requirements")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
@@ -121,45 +199,76 @@ export const reevaluateFromSourceChange = internalMutation({
     for (const requirement of affected) {
       await ctx.db.patch("requirements", requirement._id, {
         status: "review",
+        verificationStatus: "unverified",
         blockedReason: `Official source changed: ${args.changeSummary}`,
-        isPrimaryBlocker: requirement.isPrimaryBlocker || requirement.category === "setback",
+        isPrimaryBlocker:
+          requirement.isPrimaryBlocker || requirement.nodeKey === "setback",
       });
     }
+
+    await recomputeProjectMetrics(ctx, args.projectId);
 
     await appendEvent(
       ctx,
       args.projectId,
       "source.changed",
       `Re-evaluating ${affected.length} requirements after ${source.label} changed.`,
+      { actorType: "source", actorLabel: source.label },
+    );
+
+    await completeAgentRun(
+      ctx,
+      runId,
+      `Re-evaluated ${affected.length} requirements.`,
     );
 
     return null;
   },
 });
 
-function dedupeRequirements(rows: ExtractedRequirement[]): ExtractedRequirement[] {
-  const seen = new Set<string>();
-  const deduped: ExtractedRequirement[] = [];
+export const applyEvidenceToRequirements = internalMutation({
+  args: {
+    projectId: v.id("projects"),
+    nodeKeys: v.array(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const requirements = await ctx.db
+      .query("requirements")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
 
-  for (const row of rows.sort((left, right) => left.sortOrder - right.sortOrder)) {
-    const key = `${row.category}:${row.title}`;
-    if (seen.has(key)) {
-      continue;
+    for (const nodeKey of args.nodeKeys) {
+      const requirement = requirements.find((item) => item.nodeKey === nodeKey);
+      if (!requirement) {
+        continue;
+      }
+
+      if (requirement.status === "missing") {
+        await ctx.db.patch("requirements", requirement._id, {
+          status: "review",
+          verificationStatus: "unverified",
+        });
+      }
+
+      if (nodeKey === "site_plan" && requirement.status === "review") {
+        const evidence = await ctx.db
+          .query("evidenceLinks")
+          .withIndex("by_requirement", (q) => q.eq("requirementId", requirement._id))
+          .take(2);
+        if (evidence.length >= 2) {
+          await ctx.db.patch("requirements", requirement._id, {
+            status: "verified",
+            verificationStatus: "known",
+          });
+        }
+      }
     }
-    seen.add(key);
-    deduped.push(row);
-  }
 
-  if (!deduped.some((row) => row.isPrimaryBlocker)) {
-    const setback = deduped.find((row) => row.category === "setback");
-    if (setback) {
-      setback.isPrimaryBlocker = true;
-      setback.status = "blocked";
-    }
-  }
-
-  return deduped;
-}
+    await recomputeProjectMetrics(ctx, args.projectId);
+    return null;
+  },
+});
 
 async function insertRequirements(
   ctx: MutationCtx,
@@ -176,15 +285,18 @@ async function insertRequirements(
 
     await ctx.db.insert("requirements", {
       projectId,
+      nodeKey: row.nodeKey,
       title: row.title,
       category: row.category,
       status: row.status,
+      verificationStatus: row.verificationStatus,
       authority: row.authority,
       sourceLabel: source?.label,
       sourceUrl: source?.url,
       sourceId,
+      sourceExcerpt: row.sourceExcerpt,
       evidenceRequired: row.evidenceRequired,
-      blockedReason: row.excerpt ?? row.blockedReason,
+      blockedReason: row.blockedReason,
       sortOrder: row.sortOrder,
       isPrimaryBlocker: row.isPrimaryBlocker,
     });

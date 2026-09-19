@@ -259,3 +259,66 @@ textarea {
   border-radius: 0.85rem;
   padding: 0.85rem 1rem;
 }
+
+.header-grid {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.compiler-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.graph-node {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.45rem 0;
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.source-row {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  color: inherit;
+  padding: 0.75rem 0;
+  cursor: pointer;
+}
+
+.source-row:hover {
+  color: var(--accent);
+}
+
+.source-drawer {
+  border-color: rgba(95, 211, 141, 0.35);
+}
+
+.impact-card {
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  padding: 0.85rem;
+  margin-top: 0.75rem;
+}
+
+.inner-panel {
+  padding: 0.85rem;
+}
+
+.draft-body {
+  white-space: pre-wrap;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}

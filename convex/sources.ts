@@ -15,7 +15,11 @@ const sourceValidator = v.object({
   sourceType: v.string(),
   official: v.boolean(),
   monitorId: v.optional(v.string()),
+  healthStatus: v.optional(
+    v.union(v.literal("current"), v.literal("stale"), v.literal("unreachable")),
+  ),
   lastScrapedAt: v.optional(v.number()),
+  lastChangedAt: v.optional(v.number()),
 });
 
 const snapshotValidator = v.object({
@@ -75,6 +79,19 @@ export const listForProject = query({
   },
 });
 
+export const getSnapshotUrl = query({
+  args: { snapshotId: v.id("sourceSnapshots") },
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx, args) => {
+    const snapshot = await ctx.db.get("sourceSnapshots", args.snapshotId);
+    if (!snapshot?.storageId) {
+      return null;
+    }
+    await requireProjectAccess(ctx, snapshot.projectId);
+    return await ctx.storage.getUrl(snapshot.storageId);
+  },
+});
+
 export const seedOfficialSources = internalMutation({
   args: { projectId: v.id("projects") },
   returns: v.array(v.id("sources")),
@@ -102,11 +119,63 @@ export const seedOfficialSources = internalMutation({
         label: source.label,
         sourceType: source.sourceType,
         official: true,
+        healthStatus: "stale",
       });
       sourceIds.push(sourceId);
     }
 
+    await ctx.db.patch("projects", args.projectId, {
+      sourcesDiscovered: sourceIds.length,
+      updatedAt: Date.now(),
+    });
+
     return sourceIds;
+  },
+});
+
+export const addDiscoveredSource = internalMutation({
+  args: {
+    projectId: v.id("projects"),
+    key: v.string(),
+    url: v.string(),
+    label: v.string(),
+    authority: v.string(),
+  },
+  returns: v.union(v.id("sources"), v.null()),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("sources")
+      .withIndex("by_project", (q) =>
+        q.eq("projectId", args.projectId).eq("key", args.key),
+      )
+      .unique();
+
+    if (existing) {
+      return null;
+    }
+
+    const sourceId = await ctx.db.insert("sources", {
+      projectId: args.projectId,
+      key: args.key,
+      url: args.url,
+      authority: args.authority,
+      label: args.label,
+      sourceType: "discovered",
+      official: true,
+      healthStatus: "stale",
+    });
+
+    const count = await ctx.db
+      .query("sources")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    await ctx.db.patch("projects", args.projectId, {
+      sourcesDiscovered: count.length,
+      updatedAt: Date.now(),
+    });
+
+    return sourceId;
   },
 });
 
@@ -135,6 +204,18 @@ export const storeSnapshot = internalMutation({
 
     await ctx.db.patch("sources", args.sourceId, {
       lastScrapedAt: Date.now(),
+      healthStatus: "current",
+      lastChangedAt: args.changeStatus === "changed" ? Date.now() : undefined,
+    });
+
+    const projectSources = await ctx.db
+      .query("sources")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    await ctx.db.patch("projects", args.projectId, {
+      sourcesRetrieved: projectSources.filter((source) => source.lastScrapedAt).length,
+      updatedAt: Date.now(),
     });
 
     return snapshotId;
@@ -161,6 +242,17 @@ export const setMonitorInternal = internalMutation({
   handler: async (ctx, args) => {
     await ctx.db.patch("sources", args.sourceId, {
       monitorId: args.monitorId,
+    });
+    return null;
+  },
+});
+
+export const markUnreachable = internalMutation({
+  args: { sourceId: v.id("sources") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch("sources", args.sourceId, {
+      healthStatus: "unreachable",
     });
     return null;
   },

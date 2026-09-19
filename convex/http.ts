@@ -2,7 +2,7 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { auth } from "./auth";
 import { internal } from "./_generated/api";
-import { matchRequirementForInboundEmail } from "./lib/emailMatching";
+import { parseInboundEmail } from "./lib/emailParsing";
 import { verifySvixSignature } from "./lib/svix";
 
 const http = httpRouter();
@@ -67,10 +67,10 @@ http.route({
       projectId: project._id,
     });
 
-    const linkedRequirementId = matchRequirementForInboundEmail(
-      requirements,
+    const parsed = parseInboundEmail(
       payload.data.subject ?? "",
       body,
+      requirements,
     );
 
     await ctx.runMutation(internal.communications.recordInboundInternal, {
@@ -81,15 +81,27 @@ http.route({
       toAddresses: payload.data.to ?? [],
       subject: payload.data.subject ?? "Agency correspondence",
       body,
-      linkedRequirementId,
+      linkedRequirementId: parsed.linkedRequirementId,
+      classification: parsed.classification,
+      detectedDecision: parsed.detectedDecision,
+      projectImpact: parsed.projectImpact,
+      actionRequired: parsed.actionRequired,
+      extractions: parsed.extractions.map((extraction) => ({
+        extractionType: extraction.extractionType,
+        value: extraction.value,
+        confidence: extraction.confidence,
+        linkedRequirementIds: parsed.linkedRequirementId ? [parsed.linkedRequirementId] : [],
+      })),
     });
 
     await ctx.runMutation(internal.projects.appendEventInternal, {
       projectId: project._id,
       type: "email.received",
-      message: linkedRequirementId
+      message: parsed.linkedRequirementId
         ? `Inbound agency message linked to a requirement: ${payload.data.subject ?? "No subject"}`
         : `Inbound agency message received: ${payload.data.subject ?? "No subject"}`,
+      actorType: "agency",
+      actorLabel: payload.data.from ?? "Agency",
     });
 
     return new Response("OK", { status: 200 });
@@ -108,6 +120,7 @@ http.route({
         monitorId?: string;
         url?: string;
         status?: string;
+        currentScrapeId?: string;
         judgment?: {
           reason?: string;
           meaningfulChanges?: Array<{
@@ -142,33 +155,28 @@ http.route({
         page.judgment?.meaningfulChanges?.[0]?.reason ??
         "Official source content changed.";
 
-      const markdownPreview = page.diff?.text?.slice(0, 1200);
-      const contentHash = markdownPreview
-        ? await hashText(markdownPreview)
-        : undefined;
-
-      await ctx.runMutation(internal.integrations.firecrawlWebhook.processMonitorPage, {
-        monitorId: page.monitorId,
-        url: page.url,
-        status: page.status,
-        changeSummary,
-        contentHash,
-        markdownPreview,
-      });
+      if (page.status === "changed") {
+        await ctx.scheduler.runAfter(
+          0,
+          internal.integrations.firecrawlActions.rescrapeMonitoredSource,
+          {
+            monitorId: page.monitorId,
+            changeSummary,
+            diffText: page.diff?.text ?? "",
+          },
+        );
+      } else {
+        await ctx.runMutation(internal.integrations.firecrawlWebhook.processMonitorPage, {
+          monitorId: page.monitorId,
+          url: page.url,
+          status: page.status,
+          changeSummary,
+        });
+      }
     }
 
     return new Response("OK", { status: 200 });
   }),
 });
-
-async function hashText(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(value),
-  );
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
 
 export default http;

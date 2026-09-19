@@ -3,6 +3,7 @@ import { internalMutation, internalQuery, mutation, query } from "./_generated/s
 import { v } from "convex/values";
 import { getCurrentUser, requireProjectAccess } from "./lib/auth";
 import { appendEvent } from "./lib/compiler";
+import { buildClarificationDraft } from "./lib/draftEmail";
 
 const approvalValidator = v.object({
   _id: v.id("approvals"),
@@ -12,6 +13,7 @@ const approvalValidator = v.object({
   subject: v.string(),
   body: v.string(),
   toAddresses: v.array(v.string()),
+  factsUsed: v.optional(v.array(v.string())),
   requirementId: v.optional(v.id("requirements")),
   status: v.union(
     v.literal("pending"),
@@ -45,19 +47,34 @@ export const createClarificationDraft = mutation({
     projectId: v.id("projects"),
     requirementId: v.id("requirements"),
     toAddresses: v.array(v.string()),
-    subject: v.string(),
-    body: v.string(),
   },
   returns: v.id("approvals"),
   handler: async (ctx, args) => {
-    await requireProjectAccess(ctx, args.projectId);
+    const { user, project } = await requireProjectAccess(ctx, args.projectId);
+    const requirement = await ctx.db.get("requirements", args.requirementId);
+    if (!requirement) {
+      throw new Error("Requirement not found");
+    }
+
+    const parameters = await ctx.db
+      .query("projectParameters")
+      .withIndex("by_project_and_key", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    const draft = buildClarificationDraft({
+      project,
+      requirement,
+      parameters,
+      recipientEmail: args.toAddresses[0],
+    });
 
     const approvalId = await ctx.db.insert("approvals", {
       projectId: args.projectId,
       actionType: "send_clarification_email",
-      subject: args.subject,
-      body: args.body,
+      subject: draft.subject,
+      body: draft.body,
       toAddresses: args.toAddresses,
+      factsUsed: draft.factsUsed,
       requirementId: args.requirementId,
       status: "pending",
       requestedAt: Date.now(),
@@ -67,7 +84,8 @@ export const createClarificationDraft = mutation({
       ctx,
       args.projectId,
       "approval.requested",
-      `Draft clarification ready for review: ${args.subject}`,
+      `Draft clarification ready for review: ${draft.subject}`,
+      { actorType: "user", actorLabel: user.email ?? "User" },
     );
 
     return approvalId;
@@ -101,6 +119,7 @@ export const approve = mutation({
       approval.projectId,
       "approval.approved",
       `Approved outbound email: ${approval.subject}`,
+      { actorType: "user", actorLabel: user.email ?? "User" },
     );
 
     await ctx.scheduler.runAfter(
@@ -136,6 +155,7 @@ export const reject = mutation({
       approval.projectId,
       "approval.rejected",
       `Rejected outbound email: ${approval.subject}`,
+      { actorType: "user", actorLabel: user.email ?? "User" },
     );
 
     return null;

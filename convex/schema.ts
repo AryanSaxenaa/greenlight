@@ -10,6 +10,13 @@ const requirementStatus = v.union(
   v.literal("locked"),
 );
 
+const verificationStatus = v.union(
+  v.literal("known"),
+  v.literal("unverified"),
+  v.literal("unknown"),
+  v.literal("conflicted"),
+);
+
 const compilerStageStatus = v.union(
   v.literal("waiting"),
   v.literal("running"),
@@ -33,6 +40,14 @@ const approvalStatus = v.union(
   v.literal("approved"),
   v.literal("rejected"),
   v.literal("sent"),
+);
+
+const actorType = v.union(
+  v.literal("user"),
+  v.literal("agent"),
+  v.literal("agency"),
+  v.literal("source"),
+  v.literal("system"),
 );
 
 export default defineSchema({
@@ -69,6 +84,9 @@ export default defineSchema({
     requirementCount: v.number(),
     blockerCount: v.number(),
     unknownCount: v.number(),
+    sourcesDiscovered: v.number(),
+    sourcesRetrieved: v.number(),
+    rulesExtracted: v.number(),
     nextAction: v.optional(v.string()),
     primaryBlocker: v.optional(v.string()),
     primaryBlockerReason: v.optional(v.string()),
@@ -92,20 +110,57 @@ export default defineSchema({
 
   requirements: defineTable({
     projectId: v.id("projects"),
+    nodeKey: v.string(),
     title: v.string(),
     category: v.string(),
     status: requirementStatus,
+    verificationStatus: verificationStatus,
     authority: v.optional(v.string()),
     sourceLabel: v.optional(v.string()),
     sourceUrl: v.optional(v.string()),
     sourceId: v.optional(v.id("sources")),
+    sourceExcerpt: v.optional(v.string()),
     evidenceRequired: v.optional(v.string()),
     blockedReason: v.optional(v.string()),
     sortOrder: v.number(),
     isPrimaryBlocker: v.boolean(),
   })
     .index("by_project", ["projectId", "sortOrder"])
-    .index("by_project_and_status", ["projectId", "status"]),
+    .index("by_project_and_status", ["projectId", "status"])
+    .index("by_project_and_node", ["projectId", "nodeKey"]),
+
+  dependencies: defineTable({
+    projectId: v.id("projects"),
+    fromNodeKey: v.string(),
+    toNodeKey: v.string(),
+    relationship: v.string(),
+  }).index("by_project", ["projectId"]),
+
+  projectParameters: defineTable({
+    projectId: v.id("projects"),
+    key: v.string(),
+    value: v.string(),
+    unit: v.optional(v.string()),
+    source: v.string(),
+    verificationStatus: verificationStatus,
+    updatedAt: v.number(),
+  }).index("by_project_and_key", ["projectId", "key"]),
+
+  changeSets: defineTable({
+    projectId: v.id("projects"),
+    parameterKey: v.string(),
+    previousValue: v.string(),
+    proposedValue: v.string(),
+    status: v.union(v.literal("pending"), v.literal("applied"), v.literal("rejected")),
+    requirementsChanged: v.number(),
+    requirementsInvalidated: v.number(),
+    documentsAffected: v.number(),
+    blockerCreated: v.optional(v.string()),
+    affectedRequirementIds: v.array(v.id("requirements")),
+    affectedDocumentIds: v.array(v.id("documents")),
+    createdAt: v.number(),
+    appliedAt: v.optional(v.number()),
+  }).index("by_project_and_status", ["projectId", "status"]),
 
   sources: defineTable({
     projectId: v.id("projects"),
@@ -116,7 +171,11 @@ export default defineSchema({
     sourceType: v.string(),
     official: v.boolean(),
     monitorId: v.optional(v.string()),
+    healthStatus: v.optional(
+      v.union(v.literal("current"), v.literal("stale"), v.literal("unreachable")),
+    ),
     lastScrapedAt: v.optional(v.number()),
+    lastChangedAt: v.optional(v.number()),
   })
     .index("by_project", ["projectId", "key"])
     .index("by_monitor", ["monitorId"]),
@@ -144,6 +203,7 @@ export default defineSchema({
         v.object({
           label: v.string(),
           value: v.string(),
+          confidence: v.optional(v.number()),
         }),
       ),
     ),
@@ -171,9 +231,23 @@ export default defineSchema({
     subject: v.string(),
     body: v.string(),
     status: v.string(),
+    deliveryStatus: v.optional(v.string()),
+    classification: v.optional(v.string()),
+    detectedDecision: v.optional(v.string()),
+    projectImpact: v.optional(v.string()),
     linkedRequirementId: v.optional(v.id("requirements")),
     receivedAt: v.number(),
   }).index("by_project", ["projectId", "receivedAt"]),
+
+  communicationExtractions: defineTable({
+    communicationId: v.id("communications"),
+    projectId: v.id("projects"),
+    extractionType: v.string(),
+    value: v.string(),
+    linkedRequirementIds: v.array(v.id("requirements")),
+    confidence: v.number(),
+    createdAt: v.number(),
+  }).index("by_communication", ["communicationId"]),
 
   approvals: defineTable({
     projectId: v.id("projects"),
@@ -181,6 +255,7 @@ export default defineSchema({
     subject: v.string(),
     body: v.string(),
     toAddresses: v.array(v.string()),
+    factsUsed: v.optional(v.array(v.string())),
     requirementId: v.optional(v.id("requirements")),
     status: approvalStatus,
     requestedAt: v.number(),
@@ -189,10 +264,26 @@ export default defineSchema({
     providerMessageId: v.optional(v.string()),
   }).index("by_project_and_status", ["projectId", "status"]),
 
+  agentRuns: defineTable({
+    projectId: v.id("projects"),
+    actionType: v.string(),
+    trigger: v.string(),
+    status: v.union(
+      v.literal("running"),
+      v.literal("completed"),
+      v.literal("failed"),
+    ),
+    message: v.string(),
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+  }).index("by_project", ["projectId", "startedAt"]),
+
   projectEvents: defineTable({
     projectId: v.id("projects"),
     type: v.string(),
     message: v.string(),
+    actorType: actorType,
+    actorLabel: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_project", ["projectId", "createdAt"]),
 });
