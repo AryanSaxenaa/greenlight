@@ -1,3 +1,4 @@
+import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery, query } from "./_generated/server";
 import { v } from "convex/values";
 import { requireProjectAccess } from "./lib/auth";
@@ -140,4 +141,27 @@ export const storeSnapshot = internalMutation({
   },
 });
 
-import type { Id } from "./_generated/dataModel";
+export const getByMonitorInternal = internalQuery({
+  args: { monitorId: v.string() },
+  returns: v.union(sourceValidator, v.null()),
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("sources")
+      .withIndex("by_monitor", (q) => q.eq("monitorId", args.monitorId))
+      .unique();
+  },
+});
+
+export const setMonitorInternal = internalMutation({
+  args: {
+    sourceId: v.id("sources"),
+    monitorId: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch("sources", args.sourceId, {
+      monitorId: args.monitorId,
+    });
+    return null;
+  },
+});

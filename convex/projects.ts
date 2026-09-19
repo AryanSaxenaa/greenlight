@@ -5,7 +5,6 @@ import { internalMutation, internalQuery, mutation, query } from "./_generated/s
 import { v } from "convex/values";
 import { getCurrentUser, requireProjectAccess } from "./lib/auth";
 import { appendEvent, seedCompilerStages } from "./lib/compiler";
-import { seedInitialRequirements } from "./lib/requirements";
 
 const projectStatusValidator = v.union(
   v.literal("draft"),
@@ -343,8 +342,12 @@ export const runCompiler = internalMutation({
       }
 
       if (stage.stageKey === "dependency_graph" && resolvedJurisdiction) {
-        const sourceIds = await buildSourceIdMap(ctx, args.projectId);
-        await seedInitialRequirements(ctx, args.projectId, sourceIds);
+        await appendEvent(
+          ctx,
+          args.projectId,
+          "compiler.stage",
+          "Dependency graph waits for official source retrieval.",
+        );
       }
 
       await ctx.db.patch("compilerStages", stage._id, { status: "complete" });
@@ -356,26 +359,26 @@ export const runCompiler = internalMutation({
       );
     }
 
-    await finalizeProject(ctx, args.projectId);
     return null;
   },
 });
 
-async function buildSourceIdMap(
-  ctx: MutationCtx,
-  projectId: Id<"projects">,
-): Promise<Map<string, Id<"sources">>> {
-  const sources = await ctx.db
-    .query("sources")
-    .withIndex("by_project", (q) => q.eq("projectId", projectId))
-    .collect();
+export const completeCompilation = internalMutation({
+  args: { projectId: v.id("projects") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get("projects", args.projectId);
+    if (!project || project.status !== "compiling") {
+      return null;
+    }
 
-  const map = new Map<string, Id<"sources">>();
-  for (const source of sources) {
-    map.set(source.key, source._id);
-  }
-  return map;
-}
+    await ctx.runMutation(internal.requirements.applyFromSnapshots, {
+      projectId: args.projectId,
+    });
+    await finalizeProject(ctx, args.projectId);
+    return null;
+  },
+});
 
 async function finalizeProject(ctx: MutationCtx, projectId: Id<"projects">) {
   const requirements = await ctx.db

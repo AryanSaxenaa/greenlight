@@ -117,7 +117,9 @@ export default defineSchema({
     official: v.boolean(),
     monitorId: v.optional(v.string()),
     lastScrapedAt: v.optional(v.number()),
-  }).index("by_project", ["projectId", "key"]),
+  })
+    .index("by_project", ["projectId", "key"])
+    .index("by_monitor", ["monitorId"]),
 
   sourceSnapshots: defineTable({
     sourceId: v.id("sources"),
@@ -137,8 +139,27 @@ export default defineSchema({
     mimeType: v.string(),
     documentType: v.string(),
     uploadedBy: v.id("users"),
+    extractedFacts: v.optional(
+      v.array(
+        v.object({
+          label: v.string(),
+          value: v.string(),
+        }),
+      ),
+    ),
     createdAt: v.number(),
   }).index("by_project", ["projectId", "createdAt"]),
+
+  evidenceLinks: defineTable({
+    projectId: v.id("projects"),
+    documentId: v.id("documents"),
+    requirementId: v.id("requirements"),
+    fact: v.string(),
+    confidence: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_project", ["projectId", "createdAt"])
+    .index("by_requirement", ["requirementId"]),
 
   communications: defineTable({
     projectId: v.id("projects"),

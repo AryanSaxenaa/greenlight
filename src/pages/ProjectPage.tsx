@@ -20,6 +20,10 @@ export function ProjectPage() {
     api.documents.listForProject,
     projectId ? { projectId: typedProjectId } : "skip",
   );
+  const evidenceLinks = useQuery(
+    api.documents.listEvidenceForProject,
+    projectId ? { projectId: typedProjectId } : "skip",
+  );
   const communications = useQuery(
     api.communications.listForProject,
     projectId ? { projectId: typedProjectId } : "skip",
@@ -241,9 +245,48 @@ export function ProjectPage() {
                 <div>
                   <div>{document.filename}</div>
                   <div className="muted mono">{document.documentType}</div>
+                  {document.extractedFacts?.length ? (
+                    <ul className="muted" style={{ marginBottom: 0 }}>
+                      {document.extractedFacts.map((fact) => (
+                        <li key={`${fact.label}-${fact.value}`}>
+                          {fact.label}: {fact.value}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="muted" style={{ marginBottom: 0 }}>
+                      Fact extraction pending
+                    </p>
+                  )}
                 </div>
               </div>
             ))}
+          </div>
+
+          <div className="panel">
+            <h3>Evidence mapping</h3>
+            {evidenceLinks?.length ? (
+              evidenceLinks.map((link) => {
+                const requirement = sortedRequirements.find(
+                  (item) => item._id === link.requirementId,
+                );
+                const document = documents?.find(
+                  (item) => item._id === link.documentId,
+                );
+                return (
+                  <div className="event-row" key={link._id}>
+                    <div>
+                      <div>{requirement?.title ?? "Requirement"}</div>
+                      <div className="muted">
+                        {document?.filename ?? "Document"} · {link.fact}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="muted">Upload documents to map evidence to requirements.</p>
+            )}
           </div>
 
           {project.primaryBlocker ? (
@@ -311,6 +354,14 @@ export function ProjectPage() {
                     {message.direction} · {message.status}
                   </div>
                   <div>{message.subject}</div>
+                  {message.linkedRequirementId ? (
+                    <div className="mono muted">
+                      Linked requirement:{" "}
+                      {sortedRequirements.find(
+                        (item) => item._id === message.linkedRequirementId,
+                      )?.title ?? message.linkedRequirementId}
+                    </div>
+                  ) : null}
                   <div className="muted">{message.body.slice(0, 180)}</div>
                 </div>
               </div>
