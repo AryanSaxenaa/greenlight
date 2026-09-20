@@ -58,7 +58,7 @@ export function NewProjectPage() {
         />
 
         <main className="panel">
-          <p className="eyebrow">New project</p>
+          <p className="kicker">New project</p>
           <h2>What are you trying to build?</h2>
           <p className="panel-lead">
             Start with natural language. Los Angeles city addresses are supported

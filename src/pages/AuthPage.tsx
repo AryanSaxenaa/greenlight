@@ -52,7 +52,7 @@ export function AuthPage() {
         />
 
         <main className="panel">
-          <p className="eyebrow">Account</p>
+          <p className="kicker">Account</p>
           <h2>{mode === "signUp" ? "Create account" : "Sign in"}</h2>
           <p className="panel-lead">
             Authentication is required before creating a permitting project.

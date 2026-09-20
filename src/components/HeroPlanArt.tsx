@@ -1,0 +1,110 @@
+export function HeroPlanArt() {
+  return (
+    <div className="hero-plan-art" aria-hidden="true">
+      <svg viewBox="0 0 320 260" width="100%" height="auto" role="img">
+        <title>ADU floor plan schematic</title>
+        <rect
+          x="20"
+          y="20"
+          width="280"
+          height="200"
+          fill="none"
+          stroke="var(--line)"
+          strokeWidth="1.4"
+        />
+        <line
+          x1="20"
+          y1="120"
+          x2="170"
+          y2="120"
+          stroke="var(--line)"
+          strokeWidth="1.2"
+        />
+        <line
+          x1="170"
+          y1="20"
+          x2="170"
+          y2="220"
+          stroke="var(--line)"
+          strokeWidth="1.2"
+        />
+        <path
+          d="M170 120 A40 40 0 0 1 210 160"
+          fill="none"
+          stroke="var(--line)"
+          strokeWidth="1"
+        />
+        <line
+          x1="20"
+          y1="238"
+          x2="300"
+          y2="238"
+          stroke="var(--sage)"
+          strokeWidth="1"
+        />
+        <line
+          x1="20"
+          y1="234"
+          x2="20"
+          y2="242"
+          stroke="var(--sage)"
+          strokeWidth="1"
+        />
+        <line
+          x1="300"
+          y1="234"
+          x2="300"
+          y2="242"
+          stroke="var(--sage)"
+          strokeWidth="1"
+        />
+        <text
+          x="140"
+          y="253"
+          fontFamily="var(--font-mono)"
+          fontSize="9"
+          fill="var(--sage)"
+        >
+          24&apos;-0&quot; REAR SETBACK
+        </text>
+        <circle cx="230" cy="70" r="3" fill="var(--ochre)" />
+        <line
+          x1="230"
+          y1="70"
+          x2="270"
+          y2="45"
+          stroke="var(--ochre)"
+          strokeWidth="0.8"
+          strokeDasharray="2,2"
+        />
+        <text
+          x="248"
+          y="38"
+          fontFamily="var(--font-mono)"
+          fontSize="8"
+          fill="var(--ochre)"
+        >
+          HEIGHT LIMIT
+        </text>
+        <text
+          x="34"
+          y="78"
+          fontFamily="var(--font-mono)"
+          fontSize="8"
+          fill="var(--sage)"
+        >
+          GARAGE
+        </text>
+        <text
+          x="188"
+          y="78"
+          fontFamily="var(--font-mono)"
+          fontSize="8"
+          fill="var(--sage)"
+        >
+          ADU
+        </text>
+      </svg>
+    </div>
+  );
+}

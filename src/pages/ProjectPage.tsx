@@ -219,7 +219,7 @@ export function ProjectPage() {
       <section className="panel project-summary" style={{ marginBottom: "1rem" }}>
         <div className="header-grid">
           <div>
-            <p className="eyebrow">Control room</p>
+            <p className="kicker">Control room</p>
             <h2 style={{ marginBottom: "0.35rem" }}>{project.title}</h2>
             <p className="muted" style={{ margin: 0 }}>{project.intent}</p>
             <p className="mono muted" style={{ marginTop: "0.75rem" }}>
