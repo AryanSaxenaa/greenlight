@@ -25,11 +25,14 @@ const communicationValidator = v.object({
 
 const extractionValidator = v.object({
   _id: v.id("communicationExtractions"),
+  _creationTime: v.number(),
+  projectId: v.id("projects"),
   communicationId: v.id("communications"),
   extractionType: v.string(),
   value: v.string(),
   linkedRequirementIds: v.array(v.id("requirements")),
   confidence: v.number(),
+  createdAt: v.number(),
 });
 
 export const listForProject = query({

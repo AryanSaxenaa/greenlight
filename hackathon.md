@@ -34,3 +34,6 @@ Addressed PlanGreenlight audit gaps: evidence discipline on requirements, real c
 
 ### 2026-09-20 - deployment
 Deployed Greenlight to Convex Sites at https://handsome-bison-608.convex.site using `@convex-dev/static-hosting`. Fixed Convex Auth JWT key format for cloud sign-in, query return validators for parameters/agent runs, and verified core §55 flow: auth → create ADU project → compiler → change impact propose/apply. Pending: `FIRECRAWL_API_KEY` + `AGENTMAIL_API_KEY` on cloud for full scrape/monitor/email demo, demo video, vibeapps.dev submission.
+
+### 2026-09-20 - integrations live
+Set Firecrawl + AgentMail API keys on cloud. Verified full §55 email loop on live deployment: AgentMail inbox provisioned (`greenlight-y98eshf5@agentmail.to`), clarification approved and sent to test recipient, inbound agency webhook processed (classification + extractions). Polished README and fixed communication extraction query validators.

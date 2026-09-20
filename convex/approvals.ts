@@ -162,6 +162,56 @@ export const reject = mutation({
   },
 });
 
+export const seedClarificationDraftInternal = internalMutation({
+  args: {
+    projectId: v.id("projects"),
+    requirementId: v.id("requirements"),
+    toAddresses: v.array(v.string()),
+  },
+  returns: v.id("approvals"),
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get("projects", args.projectId);
+    const requirement = await ctx.db.get("requirements", args.requirementId);
+    if (!project || !requirement) {
+      throw new Error("Project or requirement not found");
+    }
+
+    const parameters = await ctx.db
+      .query("projectParameters")
+      .withIndex("by_project_and_key", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    const draft = buildClarificationDraft({
+      project,
+      requirement,
+      parameters,
+      recipientEmail: args.toAddresses[0] ?? "",
+    });
+
+    const approvalId = await ctx.db.insert("approvals", {
+      projectId: args.projectId,
+      actionType: "send_clarification_email",
+      subject: draft.subject,
+      body: draft.body,
+      toAddresses: args.toAddresses,
+      factsUsed: draft.factsUsed,
+      requirementId: args.requirementId,
+      status: "pending",
+      requestedAt: Date.now(),
+    });
+
+    await appendEvent(
+      ctx,
+      args.projectId,
+      "approval.requested",
+      `Draft clarification ready for review: ${draft.subject}`,
+      { actorType: "agent", actorLabel: "Demo seeder" },
+    );
+
+    return approvalId;
+  },
+});
+
 export const getInternal = internalQuery({
   args: { approvalId: v.id("approvals") },
   returns: v.union(approvalValidator, v.null()),
