@@ -104,9 +104,11 @@ export const saveUploaded = mutation({
       updatedAt: Date.now(),
     });
 
-    await ctx.scheduler.runAfter(0, internal.integrations.documentActions.extractFacts, {
-      documentId,
-    });
+    await ctx.scheduler.runAfter(
+      0,
+      internal.integrations.openaiActions.extractDocumentFactsWithAI,
+      { documentId },
+    );
 
     return documentId;
   },

@@ -29,6 +29,22 @@ npx convex env set FIRECRAWL_API_KEY fc_your_key
 
 Auth vars (`SITE_URL`, `JWT_PRIVATE_KEY`, `JWKS`) are already set on the dev deployment.
 
+## OpenAI via Convex AI Gateway
+
+Greenlight calls **`openai/gpt-4o-mini`** through [Convex AI Gateway](https://docs.convex.dev/ai) for requirement extraction, inbound email parsing, clarification drafts, and document fact extraction. Enable gateway billing on your Convex deployment — no `OPENAI_API_KEY` env var in app code.
+
+Smoke-test connectivity:
+
+```bash
+npx convex run integrations/openaiActions:testAiGateway
+```
+
+Run the full AI integration suite:
+
+```bash
+npx convex run testing/aggressiveSuite:runAggressiveSuite '{"gatewayIterations":3,"runFullPipeline":true}'
+```
+
 ## AgentMail webhook setup
 
 1. AgentMail → **Webhooks** → **+ Add Endpoint**

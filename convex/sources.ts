@@ -257,3 +257,46 @@ export const markUnreachable = internalMutation({
     return null;
   },
 });
+
+export const bundleForExtractionInternal = internalQuery({
+  args: { projectId: v.id("projects") },
+  returns: v.object({
+    sources: v.array(
+      v.object({
+        key: v.string(),
+        label: v.string(),
+        url: v.string(),
+        markdown: v.string(),
+      }),
+    ),
+  }),
+  handler: async (ctx, args) => {
+    const sources = await ctx.db
+      .query("sources")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    const bundled = [];
+    for (const source of sources) {
+      const latest = await ctx.db
+        .query("sourceSnapshots")
+        .withIndex("by_source", (q) => q.eq("sourceId", source._id))
+        .order("desc")
+        .take(1);
+
+      const snapshot = latest[0];
+      if (!snapshot) {
+        continue;
+      }
+
+      bundled.push({
+        key: source.key,
+        label: source.label,
+        url: source.url,
+        markdown: snapshot.markdownPreview.slice(0, 4000),
+      });
+    }
+
+    return { sources: bundled };
+  },
+});

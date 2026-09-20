@@ -3,7 +3,6 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { auth } from "./auth";
 import { components, internal } from "./_generated/api";
-import { parseInboundEmail } from "./lib/emailParsing";
 import { verifySvixSignature } from "./lib/svix";
 
 const http = httpRouter();
@@ -64,46 +63,19 @@ http.route({
     const body =
       payload.data.extracted_text ?? payload.data.text ?? "Inbound message received.";
 
-    const requirements = await ctx.runQuery(internal.requirements.listInternal, {
-      projectId: project._id,
-    });
-
-    const parsed = parseInboundEmail(
-      payload.data.subject ?? "",
-      body,
-      requirements,
+    await ctx.scheduler.runAfter(
+      0,
+      internal.integrations.openaiActions.parseInboundEmailWithAI,
+      {
+        projectId: project._id,
+        providerMessageId: payload.data.message_id,
+        threadId: payload.data.thread_id,
+        fromAddress: payload.data.from,
+        toAddresses: payload.data.to ?? [],
+        subject: payload.data.subject ?? "Agency correspondence",
+        body,
+      },
     );
-
-    await ctx.runMutation(internal.communications.recordInboundInternal, {
-      projectId: project._id,
-      providerMessageId: payload.data.message_id,
-      threadId: payload.data.thread_id,
-      fromAddress: payload.data.from,
-      toAddresses: payload.data.to ?? [],
-      subject: payload.data.subject ?? "Agency correspondence",
-      body,
-      linkedRequirementId: parsed.linkedRequirementId,
-      classification: parsed.classification,
-      detectedDecision: parsed.detectedDecision,
-      projectImpact: parsed.projectImpact,
-      actionRequired: parsed.actionRequired,
-      extractions: parsed.extractions.map((extraction) => ({
-        extractionType: extraction.extractionType,
-        value: extraction.value,
-        confidence: extraction.confidence,
-        linkedRequirementIds: parsed.linkedRequirementId ? [parsed.linkedRequirementId] : [],
-      })),
-    });
-
-    await ctx.runMutation(internal.projects.appendEventInternal, {
-      projectId: project._id,
-      type: "email.received",
-      message: parsed.linkedRequirementId
-        ? `Inbound agency message linked to a requirement: ${payload.data.subject ?? "No subject"}`
-        : `Inbound agency message received: ${payload.data.subject ?? "No subject"}`,
-      actorType: "agency",
-      actorLabel: payload.data.from ?? "Agency",
-    });
 
     return new Response("OK", { status: 200 });
   }),

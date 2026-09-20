@@ -26,8 +26,8 @@ export function ProjectsPage() {
         <p className="landing-section-kicker">Dashboard</p>
         <h2 className="app-card-title">Your projects</h2>
         <p className="app-card-lead">
-          Open a control room to track permit readiness, sources, and agency
-          correspondence.
+          Open a control room to track permit readiness, OpenAI-extracted
+          requirements, sources, documents, and agency correspondence.
         </p>
 
         {projects.length === 0 ? (

@@ -12,7 +12,7 @@ export function LandingFooter({ signedIn }: LandingFooterProps) {
         <div>
           <p className="landing-footer-brand">Greenlight</p>
           <p className="landing-footer-tagline">
-            AI permitting for Los Angeles residential work.
+            OpenAI-powered permitting for Los Angeles residential work.
           </p>
         </div>
         <div className="landing-footer-links">
@@ -35,7 +35,7 @@ export function LandingFooter({ signedIn }: LandingFooterProps) {
       </div>
       <p className="landing-footer-note">
         Built for ADUs, garage conversions, and small residential projects in Los
-        Angeles.
+        Angeles. Powered by Convex, OpenAI, Firecrawl, and AgentMail.
       </p>
       </div>
     </footer>

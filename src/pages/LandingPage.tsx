@@ -16,14 +16,14 @@ const STEPS = [
     index: "02",
     title: "Compile the permit graph",
     body:
-      "Greenlight crawls official LADBS and City Planning sources, maps requirements into a live dependency graph, and flags what is missing before plan check.",
+      "Firecrawl crawls LADBS and City Planning pages; OpenAI via Convex AI Gateway extracts structured requirements into your live permit graph.",
     icon: "graph",
   },
   {
     index: "03",
     title: "Stay permit-ready",
     body:
-      "Track blockers, upload evidence, and approve agency emails before they send. Every touchpoint stays human-reviewed.",
+      "Track blockers, upload evidence for AI fact extraction, and approve OpenAI-drafted agency emails before they send. Every touchpoint stays human-reviewed.",
     icon: "ready",
   },
 ];
@@ -37,23 +37,23 @@ const FEATURES = [
     icon: "graph",
   },
   {
-    title: "Official source research",
+    title: "OpenAI requirement extraction",
     body:
-      "Firecrawl pulls from LADBS, zoning bulletins, and planning pages so your checklist reflects what agencies actually publish.",
+      "After Firecrawl captures official LADBS and planning pages, OpenAI via Convex AI Gateway turns markdown into structured requirements with statuses and dependencies.",
     tone: "sage",
     icon: "sources",
   },
   {
     title: "Agency correspondence",
     body:
-      "AgentMail drafts clarification emails, routes them for your approval, and ingests replies back into the project record.",
+      "OpenAI drafts clarification emails and parses inbound agency replies. AgentMail sends only after your approval and syncs threads back into the project record.",
     tone: "ochre",
     icon: "mail",
   },
   {
-    title: "Human at every step",
+    title: "Document intelligence",
     body:
-      "AI does the research and drafting. You approve what gets sent, what gets filed, and what moves the project forward.",
+      "Upload site plans and surveys; OpenAI extracts structured facts and maps evidence to requirements so plan check gaps surface early.",
     tone: "ink",
     icon: "approve",
   },
@@ -70,7 +70,7 @@ const TRUST_POINTS = [
   },
   {
     title: "Auditable trail",
-    body: "Every compiler run, source crawl, and status change is logged.",
+    body: "Every compiler run, OpenAI extraction, source crawl, and status change is logged.",
   },
 ];
 
@@ -178,8 +178,9 @@ export function LandingPage() {
                 <em>before plan check.</em>
               </h1>
               <p className="landing-lede">
-                An AI permitting agent for Los Angeles residential work, with a
-                human at every agency touchpoint.
+                An AI permitting agent for Los Angeles residential work — OpenAI
+                extracts requirements, drafts agency emails, and parses replies,
+                with a human at every touchpoint.
               </p>
               <div className="landing-cta">
                 <Link className="button button-landing-primary" to={startHref}>
@@ -231,10 +232,11 @@ export function LandingPage() {
                 memory.
               </p>
               <p className="landing-section-body">
-                Greenlight researches official sources, compiles requirements into
-                a live permit graph, and manages the correspondence that keeps
-                your project moving. You get clarity on what is required, what is
-                blocked, and what to do next, before you submit.
+                Greenlight crawls official sources with Firecrawl, extracts
+                structured requirements with OpenAI via Convex AI Gateway, and
+                manages the correspondence that keeps your project moving. You
+                get clarity on what is required, what is blocked, and what to do
+                next, before you submit.
               </p>
             </div>
             <div className="landing-stat-panel" aria-label="Project metrics">
@@ -250,6 +252,15 @@ export function LandingPage() {
               <div className="landing-stat-row">
                 <span className="landing-stat-index">B</span>
                 <div className="landing-stat-copy">
+                  <span className="landing-stat-value">OpenAI extraction</span>
+                  <span className="landing-stat-label">
+                    Structured requirements from crawled official sources via Convex AI Gateway
+                  </span>
+                </div>
+              </div>
+              <div className="landing-stat-row">
+                <span className="landing-stat-index">C</span>
+                <div className="landing-stat-copy">
                   <span className="landing-stat-value">Live graph</span>
                   <span className="landing-stat-label">
                     Requirements and blockers update as agency rules change
@@ -257,11 +268,11 @@ export function LandingPage() {
                 </div>
               </div>
               <div className="landing-stat-row">
-                <span className="landing-stat-index">C</span>
+                <span className="landing-stat-index">D</span>
                 <div className="landing-stat-copy">
                   <span className="landing-stat-value">One control room</span>
                   <span className="landing-stat-label">
-                    Blockers, documents, and agency correspondence in one place
+                    Blockers, documents, AI drafts, and agency correspondence in one place
                   </span>
                 </div>
               </div>
@@ -348,8 +359,8 @@ export function LandingPage() {
               </p>
               <ul className="landing-checklist">
                 <li>ADU and garage conversion intents</li>
-                <li>LADBS and City Planning source crawling</li>
-                <li>Agency email drafts with approval before send</li>
+                <li>Firecrawl source crawling + OpenAI requirement extraction</li>
+                <li>OpenAI-drafted agency emails with approval before send</li>
                 <li>Real-time control room for your permit graph</li>
               </ul>
             </div>
@@ -397,8 +408,8 @@ export function LandingPage() {
               Ready to see your path to approval?
             </h2>
             <p className="landing-cta-copy">
-              Create a project in minutes. Greenlight compiles your permit graph and
-              opens your control room automatically.
+              Create a project in minutes. Firecrawl and OpenAI compile your permit
+              graph and open your control room automatically.
             </p>
             <div className="landing-cta">
               <Link className="button button-landing-primary" to={startHref}>

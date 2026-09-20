@@ -48,47 +48,25 @@ export const createClarificationDraft = mutation({
     requirementId: v.id("requirements"),
     toAddresses: v.array(v.string()),
   },
-  returns: v.id("approvals"),
+  returns: v.null(),
   handler: async (ctx, args) => {
-    const { user, project } = await requireProjectAccess(ctx, args.projectId);
+    await requireProjectAccess(ctx, args.projectId);
     const requirement = await ctx.db.get("requirements", args.requirementId);
     if (!requirement) {
       throw new Error("Requirement not found");
     }
 
-    const parameters = await ctx.db
-      .query("projectParameters")
-      .withIndex("by_project_and_key", (q) => q.eq("projectId", args.projectId))
-      .collect();
-
-    const draft = buildClarificationDraft({
-      project,
-      requirement,
-      parameters,
-      recipientEmail: args.toAddresses[0] ?? "",
-    });
-
-    const approvalId = await ctx.db.insert("approvals", {
-      projectId: args.projectId,
-      actionType: "send_clarification_email",
-      subject: draft.subject,
-      body: draft.body,
-      toAddresses: args.toAddresses,
-      factsUsed: draft.factsUsed,
-      requirementId: args.requirementId,
-      status: "pending",
-      requestedAt: Date.now(),
-    });
-
-    await appendEvent(
-      ctx,
-      args.projectId,
-      "approval.requested",
-      `Draft clarification ready for review: ${draft.subject}`,
-      { actorType: "user", actorLabel: user.email ?? "User" },
+    await ctx.scheduler.runAfter(
+      0,
+      internal.integrations.openaiActions.draftClarificationWithAI,
+      {
+        projectId: args.projectId,
+        requirementId: args.requirementId,
+        toAddresses: args.toAddresses,
+      },
     );
 
-    return approvalId;
+    return null;
   },
 });
 
@@ -209,6 +187,135 @@ export const seedClarificationDraftInternal = internalMutation({
     );
 
     return approvalId;
+  },
+});
+
+export const draftContextInternal = internalQuery({
+  args: {
+    projectId: v.id("projects"),
+    requirementId: v.id("requirements"),
+    toAddresses: v.array(v.string()),
+  },
+  returns: v.union(
+    v.object({
+      project: v.object({
+        intent: v.string(),
+        address: v.string(),
+        normalizedAddress: v.optional(v.string()),
+        jurisdiction: v.optional(v.string()),
+      }),
+      requirement: v.object({
+        title: v.string(),
+        blockedReason: v.optional(v.string()),
+        sourceExcerpt: v.optional(v.string()),
+      }),
+      parameters: v.array(
+        v.object({
+          key: v.string(),
+          value: v.string(),
+          unit: v.optional(v.string()),
+        }),
+      ),
+      factsUsed: v.array(v.string()),
+      templateSubject: v.string(),
+      templateBody: v.string(),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get("projects", args.projectId);
+    const requirement = await ctx.db.get("requirements", args.requirementId);
+    if (!project || !requirement) {
+      return null;
+    }
+
+    const parameters = await ctx.db
+      .query("projectParameters")
+      .withIndex("by_project_and_key", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    const draft = buildClarificationDraft({
+      project,
+      requirement,
+      parameters,
+      recipientEmail: args.toAddresses[0] ?? "",
+    });
+
+    return {
+      project: {
+        intent: project.intent,
+        address: project.address,
+        normalizedAddress: project.normalizedAddress,
+        jurisdiction: project.jurisdiction,
+      },
+      requirement: {
+        title: requirement.title,
+        blockedReason: requirement.blockedReason,
+        sourceExcerpt: requirement.sourceExcerpt,
+      },
+      parameters: parameters.map((parameter) => ({
+        key: parameter.key,
+        value: parameter.value,
+        unit: parameter.unit,
+      })),
+      factsUsed: draft.factsUsed,
+      templateSubject: draft.subject,
+      templateBody: draft.body,
+    };
+  },
+});
+
+export const createDraftInternal = internalMutation({
+  args: {
+    projectId: v.id("projects"),
+    requirementId: v.id("requirements"),
+    subject: v.string(),
+    body: v.string(),
+    toAddresses: v.array(v.string()),
+    factsUsed: v.array(v.string()),
+    aiUsed: v.boolean(),
+  },
+  returns: v.id("approvals"),
+  handler: async (ctx, args) => {
+    const approvalId = await ctx.db.insert("approvals", {
+      projectId: args.projectId,
+      actionType: "send_clarification_email",
+      subject: args.subject,
+      body: args.body,
+      toAddresses: args.toAddresses,
+      factsUsed: args.factsUsed,
+      requirementId: args.requirementId,
+      status: "pending",
+      requestedAt: Date.now(),
+    });
+
+    await appendEvent(
+      ctx,
+      args.projectId,
+      args.aiUsed ? "ai.approval_requested" : "approval.requested",
+      args.aiUsed
+        ? `OpenAI draft clarification ready for review: ${args.subject}`
+        : `Draft clarification ready for review: ${args.subject}`,
+      {
+        actorType: "agent",
+        actorLabel: args.aiUsed ? "OpenAI via Convex AI Gateway" : "Correspondence drafter",
+      },
+    );
+
+    return approvalId;
+  },
+});
+
+export const listPendingInternal = internalQuery({
+  args: { projectId: v.id("projects") },
+  returns: v.array(approvalValidator),
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("approvals")
+      .withIndex("by_project_and_status", (q) =>
+        q.eq("projectId", args.projectId).eq("status", "pending"),
+      )
+      .collect();
   },
 });
 

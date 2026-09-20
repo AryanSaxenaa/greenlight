@@ -66,8 +66,8 @@ export function NewProjectPage() {
         <h2 className="app-card-title">What are you trying to build?</h2>
         <p className="app-card-lead">
           Describe your project in plain language. Greenlight resolves your LA
-          jurisdiction, crawls official sources, and compiles your live permit
-          graph.
+          jurisdiction, Firecrawl crawls official sources, and OpenAI extracts
+          requirements into your live permit graph.
         </p>
 
         <form className="form-grid" onSubmit={onSubmit}>

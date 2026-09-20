@@ -11,9 +11,9 @@
 - **Components:** @convex-dev/auth
 - **Convex features:** schema, indexes, queries, mutations, internal mutations, actions, scheduled functions, HTTP actions, file storage, realtime queries
 - **Auth:** Convex Auth
-- **AI models:** none
+- **AI models:** openai/gpt-4o-mini (Convex AI Gateway)
 - **Started:** 2026-09-19T10:33:06Z
-- **Last updated:** 2026-09-20T06:40:00Z
+- **Last updated:** 2026-09-20T13:30:00Z
 
 ## Log
 
@@ -37,3 +37,9 @@ Deployed Greenlight to Convex Sites at https://handsome-bison-608.convex.site us
 
 ### 2026-09-20 - integrations live
 Set Firecrawl + AgentMail API keys on cloud. Verified full §55 email loop on live deployment: AgentMail inbox provisioned (`greenlight-y98eshf5@agentmail.to`), clarification approved and sent to test recipient, inbound agency webhook processed (classification + extractions). Polished README and fixed communication extraction query validators.
+
+### 2026-09-20 - openai gateway
+Integrated Convex AI Gateway with `openai/gpt-4o-mini` for requirement extraction, inbound email parsing, clarification draft generation, and document fact extraction (`convex/integrations/openaiActions.ts`, `convex/lib/aiGateway.ts`). Compiler now schedules OpenAI extraction after Firecrawl scrape; regex/template fallbacks remain when gateway calls fail. Verified gateway connectivity with `integrations/openaiActions:testAiGateway`.
+
+### 2026-09-20 - aggressive ai testing
+Added `convex/testing/aggressiveSuite.ts` and ran full AI integration tests against live deployment (requirement extraction, email parse, clarification draft, document facts). Updated README and product copy across landing page, control room, and docs to highlight OpenAI via Convex AI Gateway.

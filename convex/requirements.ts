@@ -5,9 +5,6 @@ import type { MutationCtx } from "./_generated/server";
 import { appendEvent, recomputeProjectMetrics } from "./lib/compiler";
 import { PERMIT_GRAPH_EDGES } from "./lib/dependencies";
 import {
-  baseRequirements,
-  dedupeRequirements,
-  extractRequirementsFromMarkdown,
   type ExtractedRequirement,
 } from "./lib/requirementExtraction";
 import { completeAgentRun, startAgentRun } from "./lib/agentRuns";
@@ -25,6 +22,32 @@ const requirementListItem = v.object({
     v.literal("locked"),
   ),
   blockedReason: v.optional(v.string()),
+  isPrimaryBlocker: v.boolean(),
+});
+
+const extractedRequirementValidator = v.object({
+  nodeKey: v.string(),
+  title: v.string(),
+  category: v.string(),
+  status: v.union(
+    v.literal("verified"),
+    v.literal("blocked"),
+    v.literal("review"),
+    v.literal("missing"),
+    v.literal("locked"),
+  ),
+  verificationStatus: v.union(
+    v.literal("known"),
+    v.literal("unverified"),
+    v.literal("unknown"),
+    v.literal("conflicted"),
+  ),
+  authority: v.string(),
+  evidenceRequired: v.optional(v.string()),
+  blockedReason: v.optional(v.string()),
+  sourceKey: v.optional(v.string()),
+  sourceExcerpt: v.optional(v.string()),
+  sortOrder: v.number(),
   isPrimaryBlocker: v.boolean(),
 });
 
@@ -49,8 +72,12 @@ export const listInternal = internalQuery({
   },
 });
 
-export const applyFromSnapshots = internalMutation({
-  args: { projectId: v.id("projects") },
+export const applyExtractedInternal = internalMutation({
+  args: {
+    projectId: v.id("projects"),
+    requirements: v.array(extractedRequirementValidator),
+    aiUsed: v.boolean(),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -67,7 +94,9 @@ export const applyFromSnapshots = internalMutation({
       args.projectId,
       "extract_requirements",
       "compiler",
-      "Extracting structured requirements from official sources.",
+      args.aiUsed
+        ? "Extracting structured requirements with OpenAI via Convex AI Gateway."
+        : "Extracting structured requirements from official sources.",
     );
 
     const sources = await ctx.db
@@ -76,45 +105,38 @@ export const applyFromSnapshots = internalMutation({
       .collect();
 
     const sourceIds = new Map(sources.map((source) => [source.key, source._id]));
-    const extracted: ExtractedRequirement[] = [...baseRequirements()];
-
-    for (const source of sources) {
-      const latest = await ctx.db
-        .query("sourceSnapshots")
-        .withIndex("by_source", (q) => q.eq("sourceId", source._id))
-        .order("desc")
-        .take(1);
-
-      const snapshot = latest[0];
-      if (!snapshot) {
-        continue;
-      }
-
-      extracted.push(
-        ...extractRequirementsFromMarkdown(snapshot.markdownPreview, source.key),
-      );
-    }
-
-    const deduped = dedupeRequirements(extracted);
-    await insertRequirements(ctx, args.projectId, deduped, sourceIds, sources);
+    await insertRequirements(
+      ctx,
+      args.projectId,
+      args.requirements as ExtractedRequirement[],
+      sourceIds,
+      sources,
+    );
 
     await ctx.db.patch("projects", args.projectId, {
-      rulesExtracted: deduped.length,
+      rulesExtracted: args.requirements.length,
       updatedAt: Date.now(),
     });
 
     await appendEvent(
       ctx,
       args.projectId,
-      "requirements.extracted",
-      `Extracted ${deduped.length} structured requirements from official sources.`,
-      { actorType: "agent", actorLabel: "Requirement extractor" },
+      args.aiUsed ? "ai.requirements_extracted" : "requirements.extracted",
+      args.aiUsed
+        ? `OpenAI extracted ${args.requirements.length} structured requirements from official sources.`
+        : `Extracted ${args.requirements.length} structured requirements from official sources.`,
+      {
+        actorType: "agent",
+        actorLabel: args.aiUsed ? "OpenAI via Convex AI Gateway" : "Requirement extractor",
+      },
     );
 
     await completeAgentRun(
       ctx,
       runId,
-      `Extracted ${deduped.length} requirements.`,
+      args.aiUsed
+        ? `OpenAI extracted ${args.requirements.length} requirements.`
+        : `Extracted ${args.requirements.length} requirements.`,
     );
 
     return null;

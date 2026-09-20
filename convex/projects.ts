@@ -11,7 +11,6 @@ import {
   seedCompilerStages,
   setStageStatus,
 } from "./lib/compiler";
-import { buildClarificationDraft } from "./lib/draftEmail";
 import { resolveJurisdiction, validateSupportedAddress } from "./lib/jurisdiction";
 
 const projectStatusValidator = v.union(
@@ -286,6 +285,22 @@ export const getInternal = internalQuery({
   },
 });
 
+export const listEventsInternal = internalQuery({
+  args: {
+    projectId: v.id("projects"),
+    limit: v.optional(v.number()),
+  },
+  returns: v.array(eventValidator),
+  handler: async (ctx, args) => {
+    const events = await ctx.db
+      .query("projectEvents")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .order("desc")
+      .take(args.limit ?? 20);
+    return events;
+  },
+});
+
 export const getByInboxInternal = internalQuery({
   args: { inboxId: v.string() },
   returns: v.union(projectSummaryValidator, v.null()),
@@ -440,11 +455,26 @@ export const completeCompilation = internalMutation({
       "applicable_regulations",
       "Applicable regulations",
       async () => {
-        await ctx.runMutation(internal.requirements.applyFromSnapshots, {
-          projectId: args.projectId,
-        });
+        await ctx.scheduler.runAfter(
+          0,
+          internal.integrations.openaiActions.extractRequirementsWithAI,
+          { projectId: args.projectId },
+        );
       },
     );
+
+    return null;
+  },
+});
+
+export const completeCompilationAfterRequirements = internalMutation({
+  args: { projectId: v.id("projects") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get("projects", args.projectId);
+    if (!project || project.status !== "compiling") {
+      return null;
+    }
 
     await runStage(ctx, args.projectId, "permit_pathway", "Permit pathway", async () => {
       await ctx.db.patch("projects", args.projectId, {
@@ -550,11 +580,6 @@ async function finalizeProject(ctx: MutationCtx, projectId: Id<"projects">) {
     return;
   }
 
-  const parameters = await ctx.db
-    .query("projectParameters")
-    .withIndex("by_project_and_key", (q) => q.eq("projectId", projectId))
-    .collect();
-
   const owner = await ctx.db.get("users", project.userId);
   const recipientEmail =
     process.env.CLARIFICATION_TEST_RECIPIENT ??
@@ -565,30 +590,13 @@ async function finalizeProject(ctx: MutationCtx, projectId: Id<"projects">) {
     return;
   }
 
-  const draft = buildClarificationDraft({
-    project,
-    requirement: primary,
-    parameters,
-    recipientEmail,
-  });
-
-  await ctx.db.insert("approvals", {
-    projectId,
-    actionType: "send_clarification_email",
-    subject: draft.subject,
-    body: draft.body,
-    toAddresses: draft.toAddresses,
-    factsUsed: draft.factsUsed,
-    requirementId: primary._id,
-    status: "pending",
-    requestedAt: Date.now(),
-  });
-
-  await appendEvent(
-    ctx,
-    projectId,
-    "approval.requested",
-    "Draft clarification email prepared for human approval.",
-    { actorType: "agent", actorLabel: "Correspondence drafter" },
+  await ctx.scheduler.runAfter(
+    0,
+    internal.integrations.openaiActions.draftClarificationWithAI,
+    {
+      projectId,
+      requirementId: primary._id,
+      toAddresses: [recipientEmail],
+    },
   );
 }

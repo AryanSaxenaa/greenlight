@@ -47,8 +47,8 @@ export function AuthPage() {
           {mode === "signUp" ? "Create account" : "Sign in"}
         </h2>
         <p className="app-card-lead">
-          Start a permitting project in Los Angeles. Your control room, permit
-          graph, and agency correspondence stay tied to this account.
+          Start a permitting project in Los Angeles. Your control room, AI-extracted
+          permit graph, and agency correspondence stay tied to this account.
         </p>
 
         <form className="form-grid" onSubmit={onSubmit}>

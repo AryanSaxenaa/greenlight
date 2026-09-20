@@ -240,8 +240,8 @@ function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
 
       {project.status === "compiling" ? (
         <div className="compiling-banner" style={{ marginBottom: "1rem" }}>
-          Compiling project. Stages, sources, and events update live as the
-          compiler runs.
+          Compiling project. Firecrawl retrieves sources, OpenAI extracts
+          requirements, and stages update live in the event stream.
         </div>
       ) : null}
 
@@ -407,6 +407,10 @@ function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
 
           <div className="panel">
             <h3>Documents</h3>
+            <p className="muted">
+              Upload evidence; OpenAI extracts structured facts and maps them to
+              requirements.
+            </p>
             <form className="form-grid" onSubmit={onUpload}>
               <label>
                 Document type
@@ -447,7 +451,7 @@ function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
                     </ul>
                   ) : (
                     <p className="muted" style={{ marginBottom: 0 }}>
-                      Fact extraction pending
+                      OpenAI fact extraction in progress…
                     </p>
                   )}
                 </div>
@@ -498,6 +502,9 @@ function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
           ))}
 
           <h3>Pending approvals</h3>
+          <p className="muted">
+            OpenAI-drafted agency emails. Review and approve before AgentMail sends.
+          </p>
           {approvals?.length ? (
             approvals.map((approval) => (
               <div className="panel inner-panel" key={approval._id}>
@@ -544,6 +551,9 @@ function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
           )}
 
           <h3>Inbox</h3>
+          <p className="muted">
+            Agency threads synced via AgentMail. Inbound replies are classified by OpenAI.
+          </p>
           {communications?.length ? (
             communications.map((message) => (
               <div className="event-row" key={message._id}>

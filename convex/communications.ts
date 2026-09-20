@@ -1,4 +1,4 @@
-import { internalMutation, query } from "./_generated/server";
+import { internalMutation, internalQuery, query } from "./_generated/server";
 import { v } from "convex/values";
 import { requireProjectAccess } from "./lib/auth";
 import { appendEvent, recomputeProjectMetrics } from "./lib/compiler";
@@ -40,6 +40,18 @@ export const listForProject = query({
   returns: v.array(communicationValidator),
   handler: async (ctx, args) => {
     await requireProjectAccess(ctx, args.projectId);
+    return await ctx.db
+      .query("communications")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .order("desc")
+      .collect();
+  },
+});
+
+export const listInternal = internalQuery({
+  args: { projectId: v.id("projects") },
+  returns: v.array(communicationValidator),
+  handler: async (ctx, args) => {
     return await ctx.db
       .query("communications")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
