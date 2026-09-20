@@ -3,7 +3,7 @@ import { FormEvent, useMemo, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import { AppHeader } from "../components/AppHeader";
+import { AppPageLayout } from "../components/AppPageLayout";
 import { stageLabel, statusClass, statusLabel } from "../lib/status";
 
 export function ProjectPage() {
@@ -81,24 +81,20 @@ export function ProjectPage() {
 
   if (data === undefined) {
     return (
-      <div className="page">
-        <div className="shell">
-          <p className="muted">Loading project...</p>
-        </div>
-      </div>
+      <AppPageLayout signedIn wide>
+        <p className="muted">Loading project...</p>
+      </AppPageLayout>
     );
   }
 
   if (data === null) {
     return (
-      <div className="page">
-        <div className="shell">
-          <p className="error">Project not found.</p>
-          <Link className="button button-secondary" to="/">
-            Back home
-          </Link>
-        </div>
-      </div>
+      <AppPageLayout signedIn wide>
+        <p className="error">Project not found.</p>
+        <Link className="button button-landing-secondary" to="/">
+          Back home
+        </Link>
+      </AppPageLayout>
     );
   }
 
@@ -194,20 +190,15 @@ export function ProjectPage() {
   }
 
   return (
-    <div className="page page-project">
-      <div className="shell">
-        <AppHeader
-          meta={
-            <span className="mono muted">
-              {project.address} · {project.status}
-            </span>
-          }
-          action={
-            <Link className="button button-secondary button-sm" to="/projects/new">
-              New project
-            </Link>
-          }
-        />
+    <AppPageLayout signedIn wide>
+      <div className="project-toolbar">
+        <p className="mono muted project-toolbar-meta">
+          {project.address} · {project.status}
+        </p>
+        <Link className="button button-landing-secondary button-sm" to="/projects/new">
+          New project
+        </Link>
+      </div>
 
       {project.status === "compiling" ? (
         <div className="compiling-banner" style={{ marginBottom: "1rem" }}>
@@ -219,7 +210,7 @@ export function ProjectPage() {
       <section className="panel project-summary" style={{ marginBottom: "1rem" }}>
         <div className="header-grid">
           <div>
-            <p className="kicker">Control room</p>
+            <p className="landing-section-kicker">Control room</p>
             <h2 style={{ marginBottom: "0.35rem" }}>{project.title}</h2>
             <p className="muted" style={{ margin: 0 }}>{project.intent}</p>
             <p className="mono muted" style={{ marginTop: "0.75rem" }}>
@@ -278,7 +269,7 @@ export function ProjectPage() {
                 placeholder="Proposed ADU height (ft)"
               />
               <button
-                className="button button-secondary"
+                className="button button-landing-secondary"
                 type="button"
                 onClick={onProposeHeightChange}
               >
@@ -300,14 +291,14 @@ export function ProjectPage() {
                 ) : null}
                 <div className="cta-row">
                   <button
-                    className="button button-primary"
+                    className="button button-landing-primary"
                     type="button"
                     onClick={() => applyChange({ changeSetId: change._id })}
                   >
                     Apply change
                   </button>
                   <button
-                    className="button button-secondary"
+                    className="button button-landing-secondary"
                     type="button"
                     onClick={() => rejectChange({ changeSetId: change._id })}
                   >
@@ -361,7 +352,7 @@ export function ProjectPage() {
               </p>
               <p className="muted">{selectedSnapshot.markdownPreview.slice(0, 500)}...</p>
               {snapshotUrl ? (
-                <a className="button button-secondary" href={snapshotUrl} target="_blank" rel="noreferrer">
+                <a className="button button-landing-secondary" href={snapshotUrl} target="_blank" rel="noreferrer">
                   View captured version
                 </a>
               ) : null}
@@ -388,7 +379,7 @@ export function ProjectPage() {
               </label>
               {uploadError ? <p className="error">{uploadError}</p> : null}
               <button
-                className="button button-primary"
+                className="button button-landing-primary"
                 type="submit"
                 disabled={uploading}
               >
@@ -478,14 +469,14 @@ export function ProjectPage() {
                 <pre className="draft-body">{approval.body}</pre>
                 <div className="cta-row">
                   <button
-                    className="button button-primary"
+                    className="button button-landing-primary"
                     type="button"
                     onClick={() => approveDraft({ approvalId: approval._id })}
                   >
                     Approve & send
                   </button>
                   <button
-                    className="button button-secondary"
+                    className="button button-landing-secondary"
                     type="button"
                     onClick={() => rejectDraft({ approvalId: approval._id })}
                   >
@@ -567,7 +558,6 @@ export function ProjectPage() {
           ))}
         </aside>
       </div>
-      </div>
-    </div>
+    </AppPageLayout>
   );
 }

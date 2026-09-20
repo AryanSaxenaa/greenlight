@@ -1,12 +1,18 @@
+<div align="center">
+
 # Greenlight
+
+![Greenlight landing page](./docs/readme-hero.jpg)
 
 **Turn a construction project into an executable path to approval.**
 
-Greenlight is an AI permitting agent for Los Angeles residential work (ADUs, garage conversions). It researches official sources, compiles requirements into a live permit graph, tracks blockers, drafts agency correspondence for human approval, and updates the project in real time when agencies reply.
+*An AI permitting agent for Los Angeles residential work, with a human at every agency touchpoint.*
 
-**Live demo:** https://handsome-bison-608.convex.site  
-**Repository:** https://github.com/AryanSaxenaa/greenlight  
-**Hackathon:** [Convex All Gas Hackathon](https://vibeapps.dev/judging/convex-all-gas-hackathon-openai/submit)
+**[Live demo](https://handsome-bison-608.convex.site)** · **[Repository](https://github.com/AryanSaxenaa/greenlight)** · **[Hackathon](https://vibeapps.dev/judging/convex-all-gas-hackathon-openai/submit)**
+
+</div>
+
+Greenlight researches official sources, compiles requirements into a live permit graph, tracks blockers, drafts agency correspondence for human approval, and updates the project in real time when agencies reply.
 
 ---
 
