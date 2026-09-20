@@ -4,51 +4,221 @@
 
 ![Greenlight landing page](./docs/readme-hero.jpg)
 
-**Turn a construction project into an executable path to approval.**
+### Know what the city requires **before plan check.**
 
-*An AI permitting agent for Los Angeles residential work, with a human at every agency touchpoint.*
+**Greenlight is an AI permitting agent for Los Angeles residential work.**  
+It researches official sources, compiles requirements into a live permit graph, tracks blockers, drafts agency correspondence for your approval, and updates your project in real time when agencies reply.
 
-**[Live demo](https://handsome-bison-608.convex.site)** · **[Repository](https://github.com/AryanSaxenaa/greenlight)** · **[Hackathon](https://vibeapps.dev/judging/convex-all-gas-hackathon-openai/submit)**
+[**Try the live demo**](https://handsome-bison-608.convex.site) · [**View source**](https://github.com/AryanSaxenaa/greenlight) · [**Hackathon submission**](https://vibeapps.dev/judging/convex-all-gas-hackathon-openai/submit)
+
+<br />
+
+| | |
+|---|---|
+| **Built for** | Homeowners, project managers, architects, and expeditors working on LA ADUs and garage conversions |
+| **Scope (MVP)** | Los Angeles city residential permits |
+| **Stack** | Convex · React · Firecrawl · AgentMail |
 
 </div>
 
-Greenlight researches official sources, compiles requirements into a live permit graph, tracks blockers, drafts agency correspondence for human approval, and updates the project in real time when agencies reply.
+---
+
+## The problem
+
+Los Angeles residential permitting is not one form and one fee. It is dozens of overlapping sources: LADBS bulletins, zoning overlays, fire setbacks, planning conditions, and email threads that live nowhere central.
+
+Most teams track it in spreadsheets, PDF folders, and memory. That means:
+
+- **Surprise corrections** at plan check because a requirement was missed early
+- **Slow back-and-forth** with agencies when clarifications are drafted from scratch each time
+- **No single view** of what is required, what is blocked, and what changed since last week
+
+Greenlight exists to answer one question continuously:
+
+> **What is preventing this project from moving forward right now?**
 
 ---
 
-## Highlights
+## The solution: a live permit graph
 
-- **Compiler pipeline** — Resolves LA jurisdiction, crawls official sources (Firecrawl), extracts requirements, and builds a dependency graph
-- **Realtime control room** — Project readiness, compiler stages, sources, documents, and event stream update live via Convex
-- **Change impact** — Propose parameter changes (e.g. ADU height) and preview affected requirements before applying
-- **Human-in-the-loop email** — AgentMail provisions a project inbox; clarification drafts require approval before send
-- **Inbound agency replies** — Webhook ingests replies, classifies decisions, and links extractions to requirements
+Instead of treating permitting as a pile of documents, Greenlight builds a **dependency graph of machine-readable requirements** tied to your project, parcel, and jurisdiction.
+
+Each requirement tracks its rule, source, evidence, status, dependencies, and communications. When official sources change or agency replies arrive, the graph updates and your readiness score moves with it.
+
+```text
+Describe project  →  Resolve jurisdiction  →  Crawl official sources
+        ↓                      ↓                        ↓
+   Permit graph         Requirements + deps      Blockers + next steps
+        ↓                      ↓                        ↓
+  Upload evidence  →  Approve agency emails  →  Agency replies sync back
+```
+
+**You stay in control.** AI does the research and drafting. You approve what gets sent, what gets filed, and what moves the project forward.
+
+---
+
+## Who Greenlight is for
+
+| Audience | What you get |
+|---|---|
+| **Homeowners** | Plain-language clarity on what LA requires for your ADU or conversion, before you hire or submit |
+| **Project managers** | One control room for readiness, blockers, documents, and agency correspondence |
+| **Architects & designers** | Change-impact preview when scope shifts (e.g. ADU height) so plan check surprises shrink |
+| **Expeditors** | Auditable trail of sources, compiler runs, and outbound drafts with human sign-off |
+
+Greenlight does not replace your architect or expeditor. It gives them a **live map of what the city actually requires**.
+
+---
+
+## What you can do today
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### Research & compile
+- Describe your project in plain language with an LA address
+- Automatic jurisdiction resolution (LA city in MVP)
+- Firecrawl crawls **12+ official LADBS and City Planning sources** per project
+- Requirements extracted into a structured permit graph with dependencies
+
+</td>
+<td width="50%" valign="top">
+
+### Track & act
+- Real-time **control room**: readiness %, compiler stages, sources, documents, events
+- Upload site plans and surveys; facts map to requirements
+- **Change impact**: propose parameter changes and preview affected requirements before applying
+- **Agency inbox**: AgentMail drafts clarifications; you approve before send; replies sync via webhook
+
+</td>
+</tr>
+</table>
+
+### Platform highlights
+
+| Feature | Why it matters |
+|---|---|
+| **Live permit graph** | Requirements, dependencies, and blockers in one view, not scattered across PDFs and portals |
+| **Official source research** | Checklist reflects what agencies actually publish, with source URLs and hashes |
+| **Human-in-the-loop email** | No agency message leaves without your explicit approval |
+| **Inbound reply processing** | Agency responses classified and linked back to requirements automatically |
+| **Full audit trail** | Every compiler run, crawl, status change, and approval is logged |
 
 ---
 
 ## How it works
 
 ```mermaid
-flowchart LR
-  User[Homeowner / PM] --> UI[React UI]
-  UI --> Convex[Convex Backend]
-  Convex --> Firecrawl[Firecrawl]
-  Convex --> AgentMail[AgentMail]
-  Firecrawl --> Sources[Official LA sources]
-  AgentMail --> Agency[LADBS / agencies]
-  Agency --> Webhook[Inbound webhook]
-  Webhook --> Convex
+flowchart TB
+  subgraph user["Your team"]
+    U[Homeowner / PM / Architect]
+  end
+
+  subgraph greenlight["Greenlight control room"]
+    UI[React UI]
+    PG[Permit graph]
+    CR[Compiler pipeline]
+  end
+
+  subgraph convex["Convex backend"]
+    DB[(Realtime database)]
+    FS[File storage]
+    HTTP[HTTP webhooks]
+  end
+
+  subgraph external["Integrations"]
+    FC[Firecrawl]
+    AM[AgentMail]
+    LA[LADBS / City Planning]
+  end
+
+  U --> UI
+  UI <--> DB
+  UI --> CR
+  CR --> FC
+  FC --> LA
+  CR --> PG
+  PG --> DB
+  U --> FS
+  U -->|Approve draft| AM
+  AM --> LA
+  LA -->|Reply| HTTP
+  HTTP --> DB
+  DB --> UI
 ```
 
-1. Sign in and describe your project in plain language with a Los Angeles address.
-2. Greenlight compiles jurisdiction, scrapes LADBS / City Planning sources, and seeds the permit graph.
-3. Upload evidence (site plans, surveys); facts map to requirements.
-4. When a blocker appears, Greenlight drafts a clarification email — you approve before it sends.
-5. Agency replies hit the project inbox webhook and update the UI automatically.
+**Three steps from intent to permit-ready:**
+
+1. **Describe your project** — ADU, garage conversion, or addition, in plain language, with your LA address.
+2. **Compile the permit graph** — Greenlight crawls official sources, maps requirements and dependencies, and flags gaps before plan check.
+3. **Stay permit-ready** — Track blockers, upload evidence, approve agency emails before they send, and watch replies update the graph live.
 
 ---
 
-## Quick start
+## Trust & control
+
+| Principle | How Greenlight enforces it |
+|---|---|
+| **Approval before send** | Outbound agency emails require explicit sign-off |
+| **Scoped project data** | Documents, drafts, and extractions stay tied to your account |
+| **Auditable trail** | Compiler stages, source crawls, and status changes are recorded |
+| **No black-box submissions** | You see drafts, sources, and impact before anything leaves your desk |
+
+---
+
+## For judges: why this is hard to fake
+
+Greenlight is a **full-stack permitting workflow**, not a chatbot over static PDFs.
+
+| Dimension | What we built |
+|---|---|
+| **Data model** | Projects, requirements, dependencies, compiler stages, sources, documents, communications, approvals, agent runs |
+| **Compiler pipeline** | Staged internal mutations: jurisdiction → crawl → extract → graph → readiness |
+| **Realtime UX** | Convex subscriptions power live readiness, compiler progress, and inbox updates without polling |
+| **Change impact** | Parameter proposals re-run applicability and surface affected requirements before commit |
+| **Integrations** | Firecrawl scrape + monitor webhooks; AgentMail provision, send, Svix-verified inbound webhook |
+| **Auth & isolation** | Convex Auth with user-scoped projects and server-side access checks |
+
+**Convex features used:** schema + indexes, queries, mutations, internal mutations, actions, scheduled functions, HTTP actions, file storage, realtime subscriptions.
+
+**Verified on live deployment:** auth → create ADU project → compiler completes → change impact propose/reject → clarification approve & send → inbound agency webhook updates inbox and event stream.
+
+---
+
+## Try it now
+
+| Resource | Link |
+|---|---|
+| **Live app** | https://handsome-bison-608.convex.site |
+| **Create account** | https://handsome-bison-608.convex.site/auth |
+| **Start a project** | https://handsome-bison-608.convex.site/projects/new |
+
+### Suggested demo flow (~5 min)
+
+1. Sign up and create an **ADU project** at a Los Angeles address (e.g. `1234 Sunset Blvd, Los Angeles, CA 90026`).
+2. Watch the **compiler** run: sources populate, requirements seed, readiness updates.
+3. Open **Change impact**, propose an ADU height change, review affected requirements, apply or reject.
+4. Upload a document (site plan or survey) and see it attach to the project record.
+5. When a blocker triggers a draft, **approve the clarification email** (AgentMail sends to configured test recipient).
+6. Simulate an agency reply via webhook and watch the **inbox and event stream** update live.
+
+---
+
+## Built for Los Angeles (MVP)
+
+This release focuses where permitting is hardest and most valuable: **Los Angeles city residential work**.
+
+- ADU and garage conversion intents
+- LADBS and City Planning source crawling
+- Jurisdiction validation (non-LA addresses show a clear unsupported message)
+- Project-specific path, not a generic national checklist
+
+Expansion to additional California jurisdictions is a natural next step; the compiler and graph model are jurisdiction-agnostic by design.
+
+---
+
+## Quick start (developers)
 
 ### Prerequisites
 
@@ -83,16 +253,12 @@ Put secrets in **`.env.local` only** (never commit). For cloud deploys, also run
 
 See [DEPLOY.md](./DEPLOY.md) for production URLs, redeploy commands, and webhook setup.
 
----
-
-## Deploy
+### Deploy
 
 ```bash
 npx convex dev --once --typecheck=disable   # push backend
 npx @convex-dev/static-hosting upload --build  # build + upload frontend
 ```
-
-Current deployment:
 
 | | URL |
 |---|---|
@@ -127,18 +293,6 @@ DEPLOY.md         Deployment and webhook reference
 
 ---
 
-## Demo script (§55)
-
-Verified on the live deployment:
-
-1. Create account → new ADU project at a Los Angeles address
-2. Compiler runs → sources scraped, permit graph populated
-3. Propose ADU height change → review change impact → apply
-4. Approve clarification draft → email sent via AgentMail
-5. Agency reply webhook → inbox and event stream update live
-
----
-
 ## Scripts
 
 | Command | Description |
@@ -163,4 +317,4 @@ Verified on the live deployment:
 
 MIT — see repository for details.
 
-Built for the Convex All Gas Hackathon. Powered by Convex, Firecrawl, and AgentMail.
+Built for the **Convex All Gas Hackathon**. Powered by [Convex](https://convex.dev), [Firecrawl](https://firecrawl.dev), and [AgentMail](https://agentmail.to).

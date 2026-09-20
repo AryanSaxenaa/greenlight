@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { AppPageLayout } from "../components/AppPageLayout";
+import { formatConvexError } from "../lib/errors";
 
 export function AuthPage() {
   const navigate = useNavigate();
@@ -17,7 +18,7 @@ export function AuthPage() {
 
   useEffect(() => {
     if (viewer) {
-      navigate("/projects/new");
+      navigate("/projects");
     }
   }, [viewer, navigate]);
 
@@ -31,17 +32,15 @@ export function AuthPage() {
         password,
         flow: mode,
       });
-      navigate("/projects/new");
+      navigate("/projects");
     } catch (caught) {
-      setError(
-        caught instanceof Error ? caught.message : "Authentication failed.",
-      );
+      setError(formatConvexError(caught));
       setSubmitting(false);
     }
   }
 
   return (
-    <AppPageLayout signedIn={Boolean(viewer)}>
+    <AppPageLayout>
       <div className="app-card app-card-narrow">
         <p className="landing-section-kicker">Account</p>
         <h2 className="app-card-title">
@@ -97,16 +96,24 @@ export function AuthPage() {
             <button
               className="button button-landing-secondary"
               type="button"
-              onClick={() =>
+              onClick={() => {
+                setError(null);
                 setMode((current) =>
                   current === "signUp" ? "signIn" : "signUp",
-                )
-              }
+                );
+              }}
             >
               {mode === "signUp" ? "Use existing account" : "Create account"}
             </button>
           </div>
         </form>
+
+        {mode === "signIn" ? (
+          <p className="muted app-card-foot">
+            Forgot your password? Reset is not available yet. Create a new
+            account with a different email, or contact support.
+          </p>
+        ) : null}
 
         <p className="app-card-foot">
           <Link to="/">Back to home</Link>

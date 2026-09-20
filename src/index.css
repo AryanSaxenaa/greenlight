@@ -1404,6 +1404,76 @@ h3 {
   color: var(--sage);
 }
 
+.landing-sign-out {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+.landing-sign-out:hover {
+  color: var(--ink);
+}
+
+.project-list {
+  list-style: none;
+  margin: 1.25rem 0 0;
+  padding: 0;
+}
+
+.project-list-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(22, 44, 30, 0.14);
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.55);
+  color: inherit;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.project-list-row:hover {
+  border-color: rgba(22, 44, 30, 0.28);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.project-list li + li {
+  margin-top: 0.5rem;
+}
+
+.project-list-title {
+  font-weight: 600;
+}
+
+.project-list-address {
+  margin-top: 0.2rem;
+  font-size: 0.78rem;
+}
+
+.project-list-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2rem;
+  text-align: right;
+  font-size: 0.78rem;
+}
+
+.project-list-empty {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.action-error {
+  margin-bottom: 1rem;
+}
+
 .project-toolbar {
   display: flex;
   align-items: center;

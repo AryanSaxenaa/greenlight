@@ -151,7 +151,7 @@ function StepIcon({ type }: { type: string }) {
 export function LandingPage() {
   const viewer = useQuery(api.users.viewer);
   const signedIn = Boolean(viewer);
-  const startHref = signedIn ? "/projects/new" : "/auth";
+  const startHref = signedIn ? "/projects" : "/auth";
 
   return (
     <div className="page page-landing">
@@ -168,7 +168,7 @@ export function LandingPage() {
         </div>
 
         <div className="landing-shell landing-shell-hero">
-          <LandingHeader signedIn={signedIn} />
+          <LandingHeader />
 
           <main className="landing-hero" aria-label="Introduction">
             <div className="landing-hero-copy">

@@ -1,8 +1,7 @@
+import { useAuthActions } from "@convex-dev/auth/react";
+import { useQuery } from "convex/react";
 import { Link } from "react-router-dom";
-
-type LandingHeaderProps = {
-  signedIn: boolean;
-};
+import { api } from "../../convex/_generated/api";
 
 const NAV_LINKS = [
   { label: "Product", href: "#product" },
@@ -12,7 +11,16 @@ const NAV_LINKS = [
   { label: "Docs", href: "https://github.com/AryanSaxenaa/greenlight", external: true },
 ];
 
-export function LandingHeader({ signedIn }: LandingHeaderProps) {
+export function LandingHeader() {
+  const viewer = useQuery(api.users.viewer);
+  const { signOut } = useAuthActions();
+  const signedIn = Boolean(viewer);
+
+  async function handleSignOut() {
+    await signOut();
+    window.location.assign("/");
+  }
+
   return (
     <header className="landing-header">
       <div className="landing-header-inner">
@@ -55,18 +63,35 @@ export function LandingHeader({ signedIn }: LandingHeaderProps) {
         </nav>
 
         <div className="landing-header-actions">
-          <Link
-            className="landing-login"
-            to={signedIn ? "/projects/new" : "/auth"}
-          >
-            {signedIn ? "Dashboard" : "Log In"}
-          </Link>
-          <Link
-            className="button button-landing-primary"
-            to={signedIn ? "/projects/new" : "/auth"}
-          >
-            Book A Demo
-          </Link>
+          {signedIn ? (
+            <>
+              <Link className="landing-login" to="/projects">
+                Dashboard
+              </Link>
+              <button
+                className="landing-login landing-sign-out"
+                type="button"
+                onClick={() => void handleSignOut()}
+              >
+                Sign out
+              </button>
+              <Link
+                className="button button-landing-primary"
+                to="/projects/new"
+              >
+                New project
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link className="landing-login" to="/auth">
+                Log In
+              </Link>
+              <Link className="button button-landing-primary" to="/auth">
+                Book A Demo
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>

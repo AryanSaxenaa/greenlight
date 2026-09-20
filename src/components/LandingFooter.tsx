@@ -28,7 +28,7 @@ export function LandingFooter({ signedIn }: LandingFooterProps) {
         </div>
         <Link
           className="button button-landing-primary"
-          to={signedIn ? "/projects/new" : "/auth"}
+          to={signedIn ? "/projects" : "/auth"}
         >
           Start a project
         </Link>

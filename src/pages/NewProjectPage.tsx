@@ -3,6 +3,7 @@ import { FormEvent, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { AppPageLayout } from "../components/AppPageLayout";
+import { formatConvexError } from "../lib/errors";
 
 export function NewProjectPage() {
   const navigate = useNavigate();
@@ -31,21 +32,35 @@ export function NewProjectPage() {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
+    const trimmedIntent = intent.trim();
+    const trimmedAddress = address.trim();
+
+    if (trimmedIntent.length < 8) {
+      setError("Describe your project in at least 8 characters.");
+      return;
+    }
+
+    if (trimmedAddress.length < 10) {
+      setError("Enter a complete street address with city and state.");
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
     try {
-      const projectId = await createProject({ intent, address });
+      const projectId = await createProject({
+        intent: trimmedIntent,
+        address: trimmedAddress,
+      });
       navigate(`/projects/${projectId}`);
     } catch (caught) {
-      setError(
-        caught instanceof Error ? caught.message : "Could not create project.",
-      );
+      setError(formatConvexError(caught));
       setSubmitting(false);
     }
   }
 
   return (
-    <AppPageLayout signedIn>
+    <AppPageLayout>
       <div className="app-card app-card-narrow">
         <p className="landing-section-kicker">New project</p>
         <h2 className="app-card-title">What are you trying to build?</h2>
@@ -72,7 +87,7 @@ export function NewProjectPage() {
               value={address}
               onChange={(event) => setAddress(event.target.value)}
               required
-              minLength={5}
+              minLength={10}
               placeholder="Street, city, state"
             />
           </label>

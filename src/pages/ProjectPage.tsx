@@ -1,58 +1,71 @@
 import { useMutation, useQuery } from "convex/react";
 import { FormEvent, useMemo, useState, type ReactNode } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { AppPageLayout } from "../components/AppPageLayout";
+import { QueryErrorBoundary } from "../components/QueryErrorBoundary";
+import { formatConvexError, isConvexId } from "../lib/errors";
 import { stageLabel, statusClass, statusLabel } from "../lib/status";
 
 export function ProjectPage() {
   const { projectId } = useParams();
-  const typedProjectId = projectId as Id<"projects">;
-  const data = useQuery(
-    api.projects.get,
-    projectId ? { projectId: typedProjectId } : "skip",
+  const viewer = useQuery(api.users.viewer);
+
+  if (viewer === null) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  if (viewer === undefined) {
+    return (
+      <AppPageLayout>
+        <p className="muted">Checking session...</p>
+      </AppPageLayout>
+    );
+  }
+
+  if (!isConvexId(projectId)) {
+    return (
+      <AppPageLayout wide>
+        <p className="error">Project not found.</p>
+        <Link className="button button-landing-secondary" to="/">
+          Back home
+        </Link>
+      </AppPageLayout>
+    );
+  }
+
+  return (
+    <QueryErrorBoundary>
+      <ProjectPageContent projectId={projectId as Id<"projects">} />
+    </QueryErrorBoundary>
   );
-  const sources = useQuery(
-    api.sources.listForProject,
-    projectId ? { projectId: typedProjectId } : "skip",
-  );
-  const graph = useQuery(
-    api.dependencies.getGraph,
-    projectId ? { projectId: typedProjectId } : "skip",
-  );
-  const documents = useQuery(
-    api.documents.listForProject,
-    projectId ? { projectId: typedProjectId } : "skip",
-  );
+}
+
+function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
+  const data = useQuery(api.projects.get, { projectId });
+  const sources = useQuery(api.sources.listForProject, { projectId });
+  const graph = useQuery(api.dependencies.getGraph, { projectId });
+  const documents = useQuery(api.documents.listForProject, { projectId });
   const evidenceLinks = useQuery(
     api.documents.listEvidenceForProject,
-    projectId ? { projectId: typedProjectId } : "skip",
+    { projectId },
   );
   const communications = useQuery(
     api.communications.listForProject,
-    projectId ? { projectId: typedProjectId } : "skip",
+    { projectId },
   );
   const extractions = useQuery(
     api.communications.listExtractionsForProject,
-    projectId ? { projectId: typedProjectId } : "skip",
+    { projectId },
   );
-  const approvals = useQuery(
-    api.approvals.listPending,
-    projectId ? { projectId: typedProjectId } : "skip",
-  );
-  const parameters = useQuery(
-    api.parameters.listForProject,
-    projectId ? { projectId: typedProjectId } : "skip",
-  );
+  const approvals = useQuery(api.approvals.listPending, { projectId });
+  const parameters = useQuery(api.parameters.listForProject, { projectId });
   const pendingChanges = useQuery(
     api.parameters.listPendingChanges,
-    projectId ? { projectId: typedProjectId } : "skip",
+    { projectId },
   );
-  const agentRuns = useQuery(
-    api.agentRuns.listForProject,
-    projectId ? { projectId: typedProjectId } : "skip",
-  );
+  const agentRuns = useQuery(api.agentRuns.listForProject, { projectId });
 
   const generateUploadUrl = useMutation(api.documents.generateUploadUrl);
   const saveUploaded = useMutation(api.documents.saveUploaded);
@@ -64,8 +77,18 @@ export function ProjectPage() {
 
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [selectedSourceId, setSelectedSourceId] = useState<Id<"sources"> | null>(null);
   const [proposedHeight, setProposedHeight] = useState("18");
+
+  async function runAction(action: () => Promise<void>) {
+    setActionError(null);
+    try {
+      await action();
+    } catch (caught) {
+      setActionError(formatConvexError(caught));
+    }
+  }
 
   const selectedSnapshot = useMemo(() => {
     if (!selectedSourceId || !sources) {
@@ -81,7 +104,7 @@ export function ProjectPage() {
 
   if (data === undefined) {
     return (
-      <AppPageLayout signedIn wide>
+      <AppPageLayout wide>
         <p className="muted">Loading project...</p>
       </AppPageLayout>
     );
@@ -89,7 +112,7 @@ export function ProjectPage() {
 
   if (data === null) {
     return (
-      <AppPageLayout signedIn wide>
+      <AppPageLayout wide>
         <p className="error">Project not found.</p>
         <Link className="button button-landing-secondary" to="/">
           Back home
@@ -134,41 +157,49 @@ export function ProjectPage() {
     const typeInput = form.elements.namedItem("documentType") as HTMLSelectElement;
     const file = fileInput.files?.[0];
     if (!file) {
+      setUploadError("Choose a file to upload.");
       return;
     }
 
     setUploading(true);
     setUploadError(null);
+    setActionError(null);
     try {
       const uploadUrl = await generateUploadUrl({});
       const result = await fetch(uploadUrl, {
         method: "POST",
-        headers: { "Content-Type": file.type },
+        headers: { "Content-Type": file.type || "application/octet-stream" },
         body: file,
       });
-      const { storageId } = (await result.json()) as { storageId: Id<"_storage"> };
+      if (!result.ok) {
+        throw new Error(`Upload failed (${result.status}).`);
+      }
+      const payload = (await result.json()) as { storageId?: Id<"_storage"> };
+      if (!payload.storageId) {
+        throw new Error("Upload failed. No file was stored.");
+      }
       await saveUploaded({
-        projectId: typedProjectId,
-        storageId,
+        projectId,
+        storageId: payload.storageId,
         filename: file.name,
         mimeType: file.type || "application/octet-stream",
         documentType: typeInput.value,
       });
       form.reset();
     } catch (caught) {
-      setUploadError(
-        caught instanceof Error ? caught.message : "Upload failed.",
-      );
+      setUploadError(formatConvexError(caught));
     } finally {
       setUploading(false);
     }
   }
 
   async function onProposeHeightChange() {
-    await proposeChange({
-      projectId: typedProjectId,
-      parameterKey: "proposedAduHeightFt",
-      proposedValue: proposedHeight,
+    await runAction(async () => {
+      await proposeChange({
+        projectId,
+        parameterKey: "proposedAduHeightFt",
+        proposedValue: proposedHeight,
+      });
     });
   }
 
@@ -190,15 +221,22 @@ export function ProjectPage() {
   }
 
   return (
-    <AppPageLayout signedIn wide>
+    <AppPageLayout wide>
       <div className="project-toolbar">
         <p className="mono muted project-toolbar-meta">
           {project.address} · {project.status}
         </p>
-        <Link className="button button-landing-secondary button-sm" to="/projects/new">
-          New project
-        </Link>
+        <div className="cta-row">
+          <Link className="button button-landing-secondary button-sm" to="/projects">
+            All projects
+          </Link>
+          <Link className="button button-landing-secondary button-sm" to="/projects/new">
+            New project
+          </Link>
+        </div>
       </div>
+
+      {actionError ? <p className="error action-error">{actionError}</p> : null}
 
       {project.status === "compiling" ? (
         <div className="compiling-banner" style={{ marginBottom: "1rem" }}>
@@ -271,7 +309,7 @@ export function ProjectPage() {
               <button
                 className="button button-landing-secondary"
                 type="button"
-                onClick={onProposeHeightChange}
+                onClick={() => void onProposeHeightChange()}
               >
                 Propose height change
               </button>
@@ -293,14 +331,22 @@ export function ProjectPage() {
                   <button
                     className="button button-landing-primary"
                     type="button"
-                    onClick={() => applyChange({ changeSetId: change._id })}
+                    onClick={() =>
+                      void runAction(async () => {
+                        await applyChange({ changeSetId: change._id });
+                      })
+                    }
                   >
                     Apply change
                   </button>
                   <button
                     className="button button-landing-secondary"
                     type="button"
-                    onClick={() => rejectChange({ changeSetId: change._id })}
+                    onClick={() =>
+                      void runAction(async () => {
+                        await rejectChange({ changeSetId: change._id });
+                      })
+                    }
                   >
                     Reject
                   </button>
@@ -471,14 +517,22 @@ export function ProjectPage() {
                   <button
                     className="button button-landing-primary"
                     type="button"
-                    onClick={() => approveDraft({ approvalId: approval._id })}
+                    onClick={() =>
+                      void runAction(async () => {
+                        await approveDraft({ approvalId: approval._id });
+                      })
+                    }
                   >
                     Approve & send
                   </button>
                   <button
                     className="button button-landing-secondary"
                     type="button"
-                    onClick={() => rejectDraft({ approvalId: approval._id })}
+                    onClick={() =>
+                      void runAction(async () => {
+                        await rejectDraft({ approvalId: approval._id });
+                      })
+                    }
                   >
                     Reject
                   </button>
