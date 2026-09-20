@@ -12,12 +12,20 @@ export function LandingFooter({ signedIn }: LandingFooterProps) {
         <div>
           <p className="landing-footer-brand">Greenlight</p>
           <p className="landing-footer-tagline">
-            OpenAI-powered permitting for Los Angeles residential work.
+            AI permitting for Los Angeles residential work.
           </p>
         </div>
         <div className="landing-footer-links">
           <a href="#product">Product</a>
           <a href="#how-it-works">How it works</a>
+          <a href="#stack">Stack</a>
+          <a
+            href="https://www.convex.dev/hackathons/all-gas"
+            target="_blank"
+            rel="noreferrer"
+          >
+            All Gas Hackathon
+          </a>
           <a
             href="https://github.com/AryanSaxenaa/greenlight"
             target="_blank"
@@ -34,8 +42,31 @@ export function LandingFooter({ signedIn }: LandingFooterProps) {
         </Link>
       </div>
       <p className="landing-footer-note">
-        Built for ADUs, garage conversions, and small residential projects in Los
-        Angeles. Powered by Convex, OpenAI, Firecrawl, and AgentMail.
+        Built for the{" "}
+        <a
+          href="https://www.convex.dev/hackathons/all-gas"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Convex All Gas Hackathon
+        </a>
+        . Powered by{" "}
+        <a href="https://convex.dev" target="_blank" rel="noreferrer">
+          Convex
+        </a>
+        ,{" "}
+        <a href="https://openai.com" target="_blank" rel="noreferrer">
+          OpenAI
+        </a>
+        ,{" "}
+        <a href="https://firecrawl.dev" target="_blank" rel="noreferrer">
+          Firecrawl
+        </a>
+        , and{" "}
+        <a href="https://agentmail.to" target="_blank" rel="noreferrer">
+          AgentMail
+        </a>
+        .
       </p>
       </div>
     </footer>

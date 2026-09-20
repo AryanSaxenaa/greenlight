@@ -4,6 +4,33 @@ import { api } from "../../convex/_generated/api";
 import { LandingFooter } from "../components/LandingFooter";
 import { LandingHeader } from "../components/LandingHeader";
 
+const SPONSORS = [
+  {
+    name: "Convex",
+    href: "https://convex.dev",
+    role:
+      "Realtime database, compiler pipeline, auth, file storage, HTTP webhooks, and AI Gateway orchestration.",
+  },
+  {
+    name: "OpenAI",
+    href: "https://openai.com",
+    role:
+      "Requirement extraction, email parsing, clarification drafts, and document facts via Convex AI Gateway (`gpt-4o-mini`).",
+  },
+  {
+    name: "Firecrawl",
+    href: "https://firecrawl.dev",
+    role:
+      "Crawls and monitors official LADBS and City Planning sources; webhook-driven re-evaluation when pages change.",
+  },
+  {
+    name: "AgentMail",
+    href: "https://agentmail.to",
+    role:
+      "Project inboxes, outbound send after your approval, and Svix-verified inbound agency reply webhooks.",
+  },
+];
+
 const STEPS = [
   {
     index: "01",
@@ -16,14 +43,14 @@ const STEPS = [
     index: "02",
     title: "Compile the permit graph",
     body:
-      "Firecrawl crawls LADBS and City Planning pages; OpenAI via Convex AI Gateway extracts structured requirements into your live permit graph.",
+      "Firecrawl crawls official LADBS and City Planning sources. OpenAI via Convex AI Gateway extracts structured requirements into a live dependency graph stored on Convex.",
     icon: "graph",
   },
   {
     index: "03",
     title: "Stay permit-ready",
     body:
-      "Track blockers, upload evidence for AI fact extraction, and approve OpenAI-drafted agency emails before they send. Every touchpoint stays human-reviewed.",
+      "Track blockers, upload evidence, and approve OpenAI-drafted clarifications sent through AgentMail. Replies sync back to your realtime control room.",
     icon: "ready",
   },
 ];
@@ -32,30 +59,30 @@ const FEATURES = [
   {
     title: "Live permit graph",
     body:
-      "Requirements, dependencies, and blockers update in one view, not scattered across PDFs, portals, and email threads.",
+      "Convex powers a realtime control room where requirements, dependencies, and blockers update without refresh.",
     tone: "forest",
     icon: "graph",
   },
   {
-    title: "OpenAI requirement extraction",
+    title: "Official source research",
     body:
-      "After Firecrawl captures official LADBS and planning pages, OpenAI via Convex AI Gateway turns markdown into structured requirements with statuses and dependencies.",
+      "Firecrawl pulls from LADBS, zoning bulletins, and planning pages so your checklist reflects what agencies actually publish.",
     tone: "sage",
     icon: "sources",
   },
   {
-    title: "Agency correspondence",
+    title: "AI extraction & drafts",
     body:
-      "OpenAI drafts clarification emails and parses inbound agency replies. AgentMail sends only after your approval and syncs threads back into the project record.",
-    tone: "ochre",
-    icon: "mail",
-  },
-  {
-    title: "Document intelligence",
-    body:
-      "Upload site plans and surveys; OpenAI extracts structured facts and maps evidence to requirements so plan check gaps surface early.",
+      "OpenAI via Convex AI Gateway turns crawled sources into structured requirements, parses agency replies, and drafts clarifications for your review.",
     tone: "ink",
     icon: "approve",
+  },
+  {
+    title: "Agency correspondence",
+    body:
+      "AgentMail provisions project inboxes, sends approved outbound mail, and ingests inbound replies through verified webhooks.",
+    tone: "ochre",
+    icon: "mail",
   },
 ];
 
@@ -70,7 +97,7 @@ const TRUST_POINTS = [
   },
   {
     title: "Auditable trail",
-    body: "Every compiler run, OpenAI extraction, source crawl, and status change is logged.",
+    body: "Every compiler run, source crawl, and status change is logged.",
   },
 ];
 
@@ -172,15 +199,24 @@ export function LandingPage() {
 
           <main className="landing-hero" aria-label="Introduction">
             <div className="landing-hero-copy">
-              <p className="landing-kicker">Los Angeles · ADUs · Garage Conversions</p>
+              <p className="landing-kicker">
+                Los Angeles · ADUs ·{" "}
+                <a
+                  className="landing-kicker-link"
+                  href="https://www.convex.dev/hackathons/all-gas"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Convex All Gas Hackathon
+                </a>
+              </p>
               <h1 className="landing-title">
                 Know what the city requires{" "}
                 <em>before plan check.</em>
               </h1>
               <p className="landing-lede">
-                An AI permitting agent for Los Angeles residential work — OpenAI
-                extracts requirements, drafts agency emails, and parses replies,
-                with a human at every touchpoint.
+                An AI permitting agent for Los Angeles residential work, with a
+                human at every agency touchpoint.
               </p>
               <div className="landing-cta">
                 <Link className="button button-landing-primary" to={startHref}>
@@ -232,11 +268,10 @@ export function LandingPage() {
                 memory.
               </p>
               <p className="landing-section-body">
-                Greenlight crawls official sources with Firecrawl, extracts
-                structured requirements with OpenAI via Convex AI Gateway, and
-                manages the correspondence that keeps your project moving. You
-                get clarity on what is required, what is blocked, and what to do
-                next, before you submit.
+                Greenlight researches official sources, compiles requirements into
+                a live permit graph, and manages the correspondence that keeps
+                your project moving. You get clarity on what is required, what is
+                blocked, and what to do next, before you submit.
               </p>
             </div>
             <div className="landing-stat-panel" aria-label="Project metrics">
@@ -252,15 +287,6 @@ export function LandingPage() {
               <div className="landing-stat-row">
                 <span className="landing-stat-index">B</span>
                 <div className="landing-stat-copy">
-                  <span className="landing-stat-value">OpenAI extraction</span>
-                  <span className="landing-stat-label">
-                    Structured requirements from crawled official sources via Convex AI Gateway
-                  </span>
-                </div>
-              </div>
-              <div className="landing-stat-row">
-                <span className="landing-stat-index">C</span>
-                <div className="landing-stat-copy">
                   <span className="landing-stat-value">Live graph</span>
                   <span className="landing-stat-label">
                     Requirements and blockers update as agency rules change
@@ -268,11 +294,11 @@ export function LandingPage() {
                 </div>
               </div>
               <div className="landing-stat-row">
-                <span className="landing-stat-index">D</span>
+                <span className="landing-stat-index">C</span>
                 <div className="landing-stat-copy">
                   <span className="landing-stat-value">One control room</span>
                   <span className="landing-stat-label">
-                    Blockers, documents, AI drafts, and agency correspondence in one place
+                    Blockers, documents, and agency correspondence in one place
                   </span>
                 </div>
               </div>
@@ -340,6 +366,49 @@ export function LandingPage() {
           </div>
         </section>
 
+        <section
+          className="landing-section landing-section-muted landing-section-sponsors"
+          id="stack"
+        >
+          <div className="landing-section-inner">
+            <div className="landing-section-head landing-section-head-center">
+              <p className="landing-section-kicker">
+                <span className="landing-kicker-line" aria-hidden="true" />
+                All Gas stack
+              </p>
+              <h2 className="landing-section-title landing-section-title-center">
+                Built with Convex, OpenAI, Firecrawl, and AgentMail.
+              </h2>
+              <p className="landing-section-intro">
+                Greenlight is an entry for the{" "}
+                <a
+                  href="https://www.convex.dev/hackathons/all-gas"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Convex All Gas Hackathon
+                </a>
+                . Each sponsor powers a distinct part of the permitting workflow.
+              </p>
+            </div>
+            <div className="landing-sponsor-grid">
+              {SPONSORS.map((sponsor) => (
+                <article key={sponsor.name} className="landing-sponsor-card">
+                  <a
+                    className="landing-sponsor-name"
+                    href={sponsor.href}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {sponsor.name}
+                  </a>
+                  <p>{sponsor.role}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
         <section className="landing-section landing-section-muted landing-section-la" id="built-for">
           <div className="landing-section-inner">
           <div className="landing-section-grid landing-section-grid-split">
@@ -360,8 +429,8 @@ export function LandingPage() {
               <ul className="landing-checklist">
                 <li>ADU and garage conversion intents</li>
                 <li>Firecrawl source crawling + OpenAI requirement extraction</li>
-                <li>OpenAI-drafted agency emails with approval before send</li>
-                <li>Real-time control room for your permit graph</li>
+                <li>AgentMail inbox with approval before send</li>
+                <li>Convex realtime control room for your permit graph</li>
               </ul>
             </div>
             <div className="landing-quote-card">
@@ -408,8 +477,8 @@ export function LandingPage() {
               Ready to see your path to approval?
             </h2>
             <p className="landing-cta-copy">
-              Create a project in minutes. Firecrawl and OpenAI compile your permit
-              graph and open your control room automatically.
+              Create a project in minutes. Greenlight compiles your permit graph and
+              opens your control room automatically.
             </p>
             <div className="landing-cta">
               <Link className="button button-landing-primary" to={startHref}>

@@ -1,7 +1,7 @@
 # Hackathon log
 
 - **Project:** Greenlight
-- **Event:** Convex All Gas Hackathon
+- **Event:** [Convex All Gas Hackathon](https://www.convex.dev/hackathons/all-gas)
 - **What it does:** An AI permitting agent that turns a construction project into an executable path to approval.
 - **Live app:** https://handsome-bison-608.convex.site
 - **Repo:** https://github.com/AryanSaxenaa/greenlight
