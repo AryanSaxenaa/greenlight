@@ -1,10 +1,11 @@
 import { useMutation, useQuery } from "convex/react";
 import { FormEvent, useState } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { AppPageLayout } from "../components/AppPageLayout";
 import { HoneypotField } from "../components/HoneypotField";
 import { PageMeta } from "../components/PageMeta";
+import { authRedirectPath } from "../lib/authRedirect";
 import { formatConvexError } from "../lib/errors";
 import {
   isHoneypotFilled,
@@ -14,6 +15,7 @@ import {
 
 export function NewProjectPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const viewer = useQuery(api.users.viewer);
   const createProject = useMutation(api.projects.create);
   const [intent, setIntent] = useState(
@@ -31,7 +33,12 @@ export function NewProjectPage() {
   const [submitting, setSubmitting] = useState(false);
 
   if (viewer === null) {
-    return <Navigate to="/auth" replace />;
+    return (
+      <Navigate
+        to={authRedirectPath(`${location.pathname}${location.search}`)}
+        replace
+      />
+    );
   }
 
   if (viewer === undefined) {
@@ -100,21 +107,28 @@ export function NewProjectPage() {
           <label>
             Project intent
             <textarea
+              id="new-project-intent"
               value={intent}
               onChange={(event) => setIntent(event.target.value)}
               required
               minLength={8}
               maxLength={2000}
               aria-invalid={Boolean(fieldErrors.intent)}
+              aria-describedby={
+                fieldErrors.intent ? "new-project-intent-error" : undefined
+              }
             />
             {fieldErrors.intent ? (
-              <span className="field-error">{fieldErrors.intent}</span>
+              <span className="field-error" id="new-project-intent-error">
+                {fieldErrors.intent}
+              </span>
             ) : null}
           </label>
 
           <label>
             Property address
             <input
+              id="new-project-address"
               value={address}
               onChange={(event) => setAddress(event.target.value)}
               required
@@ -122,9 +136,14 @@ export function NewProjectPage() {
               maxLength={300}
               placeholder="Street, city, state"
               aria-invalid={Boolean(fieldErrors.address)}
+              aria-describedby={
+                fieldErrors.address ? "new-project-address-error" : undefined
+              }
             />
             {fieldErrors.address ? (
-              <span className="field-error">{fieldErrors.address}</span>
+              <span className="field-error" id="new-project-address-error">
+                {fieldErrors.address}
+              </span>
             ) : null}
           </label>
 

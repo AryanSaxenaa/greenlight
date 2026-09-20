@@ -117,6 +117,19 @@ export const parseInboundEmailWithAI = internalAction({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    if (args.providerMessageId) {
+      const duplicate = await ctx.runQuery(
+        internal.communications.findByProviderMessageInternal,
+        {
+          projectId: args.projectId,
+          providerMessageId: args.providerMessageId,
+        },
+      );
+      if (duplicate) {
+        return null;
+      }
+    }
+
     const requirements = await ctx.runQuery(internal.requirements.listInternal, {
       projectId: args.projectId,
     });

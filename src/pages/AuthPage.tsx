@@ -7,6 +7,7 @@ import { AppPageLayout } from "../components/AppPageLayout";
 import { HoneypotField } from "../components/HoneypotField";
 import { PageMeta } from "../components/PageMeta";
 import { formatConvexError } from "../lib/errors";
+import { resolveReturnTo } from "../lib/authRedirect";
 import {
   isHoneypotFilled,
   validateEmail,
@@ -33,9 +34,9 @@ export function AuthPage() {
 
   useEffect(() => {
     if (viewer) {
-      navigate("/projects");
+      navigate(resolveReturnTo(searchParams));
     }
-  }, [viewer, navigate]);
+  }, [viewer, navigate, searchParams]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -65,7 +66,7 @@ export function AuthPage() {
         password,
         flow: mode,
       });
-      navigate("/projects");
+      navigate(resolveReturnTo(searchParams));
     } catch (caught) {
       setError(formatConvexError(caught));
       setSubmitting(false);
@@ -96,6 +97,7 @@ export function AuthPage() {
           <label>
             Email
             <input
+              id="auth-email"
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
@@ -103,15 +105,19 @@ export function AuthPage() {
               autoComplete="email"
               placeholder="you@example.com"
               aria-invalid={Boolean(fieldErrors.email)}
+              aria-describedby={fieldErrors.email ? "auth-email-error" : undefined}
             />
             {fieldErrors.email ? (
-              <span className="field-error">{fieldErrors.email}</span>
+              <span className="field-error" id="auth-email-error">
+                {fieldErrors.email}
+              </span>
             ) : null}
           </label>
 
           <label>
             Password
             <input
+              id="auth-password"
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
@@ -123,9 +129,14 @@ export function AuthPage() {
               }
               placeholder="At least 8 characters"
               aria-invalid={Boolean(fieldErrors.password)}
+              aria-describedby={
+                fieldErrors.password ? "auth-password-error" : undefined
+              }
             />
             {fieldErrors.password ? (
-              <span className="field-error">{fieldErrors.password}</span>
+              <span className="field-error" id="auth-password-error">
+                {fieldErrors.password}
+              </span>
             ) : null}
           </label>
 

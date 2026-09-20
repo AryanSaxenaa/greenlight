@@ -6,7 +6,8 @@ import { PageMeta } from "../components/PageMeta";
 
 export function NotFoundPage() {
   const viewer = useQuery(api.users.viewer);
-  const startHref = viewer ? "/projects/new" : "/auth";
+  const startHref =
+    viewer === undefined ? "/auth" : viewer ? "/projects/new" : "/auth";
 
   return (
     <AppPageLayout>

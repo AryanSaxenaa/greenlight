@@ -12,6 +12,7 @@ export const scrapeProjectSources = internalAction({
     const apiKey = process.env.FIRECRAWL_API_KEY;
     const client = apiKey ? new Firecrawl({ apiKey }) : new Firecrawl();
     const siteUrl = process.env.CONVEX_SITE_URL ?? process.env.PUBLIC_SITE_URL;
+    const webhookSecret = process.env.FIRECRAWL_WEBHOOK_SECRET;
 
     const runId = await ctx.runMutation(internal.agentRuns.startInternal, {
       projectId: args.projectId,
@@ -105,7 +106,9 @@ export const scrapeProjectSources = internalAction({
               name: `greenlight-${args.projectId}-${source.key}`,
               schedule: { text: "daily" },
               webhook: {
-                url: `${siteUrl}/webhooks/firecrawl`,
+                url: webhookSecret
+                  ? `${siteUrl}/webhooks/firecrawl?secret=${encodeURIComponent(webhookSecret)}`
+                  : `${siteUrl}/webhooks/firecrawl`,
                 metadata: {
                   projectId: args.projectId,
                   sourceKey: source.key,
@@ -184,23 +187,34 @@ export const rescrapeMonitoredSource = internalAction({
       return null;
     }
 
-    const result = await client.scrape(source.url, { formats: ["markdown"] });
-    const markdown = result.markdown ?? args.diffText;
-    const preview = markdown.slice(0, 8000);
-    const contentHash = createHash("sha256").update(markdown).digest("hex");
-    const storageId = markdown
-      ? await ctx.storage.store(new Blob([markdown], { type: "text/markdown" }))
-      : undefined;
+    try {
+      const result = await client.scrape(source.url, { formats: ["markdown"] });
+      const markdown = result.markdown ?? args.diffText;
+      const preview = markdown.slice(0, 8000);
+      const contentHash = createHash("sha256").update(markdown).digest("hex");
+      const storageId = markdown
+        ? await ctx.storage.store(new Blob([markdown], { type: "text/markdown" }))
+        : undefined;
 
-    await ctx.runMutation(internal.integrations.firecrawlWebhook.processMonitorPage, {
-      monitorId: args.monitorId,
-      url: source.url,
-      status: "changed",
-      changeSummary: args.changeSummary,
-      contentHash,
-      markdownPreview: preview,
-      storageId,
-    });
+      await ctx.runMutation(internal.integrations.firecrawlWebhook.processMonitorPage, {
+        monitorId: args.monitorId,
+        url: source.url,
+        status: "changed",
+        changeSummary: args.changeSummary,
+        contentHash,
+        markdownPreview: preview,
+        storageId,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown scrape error";
+      await ctx.runMutation(internal.projects.appendEventInternal, {
+        projectId: source.projectId,
+        type: "source.rescrape_failed",
+        message: `Failed to refresh ${source.label}: ${message}`,
+        actorType: "agent",
+        actorLabel: "Firecrawl",
+      });
+    }
 
     return null;
   },

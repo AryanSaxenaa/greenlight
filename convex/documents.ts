@@ -135,6 +135,17 @@ export const applyExtractionInternal = internalMutation({
       extractedFacts: args.facts,
     });
 
+    const priorLinks = await ctx.db
+      .query("evidenceLinks")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    for (const link of priorLinks) {
+      if (link.documentId === args.documentId) {
+        await ctx.db.delete("evidenceLinks", link._id);
+      }
+    }
+
     const requirements = await ctx.db
       .query("requirements")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))

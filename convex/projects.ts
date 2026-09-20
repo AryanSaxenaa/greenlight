@@ -439,6 +439,11 @@ export const completeCompilation = internalMutation({
       return null;
     }
 
+    if (project.sourcesRetrieved === 0) {
+      await abortCompilation(ctx, args.projectId);
+      return null;
+    }
+
     await runStage(
       ctx,
       args.projectId,
@@ -490,6 +495,17 @@ export const completeCompilationAfterRequirements = internalMutation({
       return null;
     }
 
+    const stages = await ctx.db
+      .query("compilerStages")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+    const dependencyStage = stages.find(
+      (stage) => stage.stageKey === "dependency_graph",
+    );
+    if (dependencyStage?.status === "complete") {
+      return null;
+    }
+
     await runStage(ctx, args.projectId, "permit_pathway", "Permit pathway", async () => {
       await ctx.db.patch("projects", args.projectId, {
         permitPathStages: 4,
@@ -523,6 +539,37 @@ export const completeCompilationAfterRequirements = internalMutation({
     return null;
   },
 });
+
+async function abortCompilation(ctx: MutationCtx, projectId: Id<"projects">) {
+  const waitingStages = [
+    "authority_sources",
+    "project_classification",
+    "applicable_regulations",
+    "permit_pathway",
+    "evidence_requirements",
+    "dependency_graph",
+  ];
+
+  for (const stageKey of waitingStages) {
+    await setStageStatus(ctx, projectId, stageKey, "complete");
+  }
+
+  await ctx.db.patch("projects", projectId, {
+    status: "active",
+    readinessPercent: 0,
+    nextAction:
+      "Could not retrieve official sources. Check Firecrawl configuration and retry by creating a new project.",
+    updatedAt: Date.now(),
+  });
+
+  await appendEvent(
+    ctx,
+    projectId,
+    "compiler.failed",
+    "Compilation halted: no official sources were retrieved.",
+    { actorType: "system", actorLabel: "Greenlight" },
+  );
+}
 
 async function finalizeUnsupportedProject(
   ctx: MutationCtx,

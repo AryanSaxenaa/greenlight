@@ -66,7 +66,8 @@ export function PrivacyPage() {
       <ul>
         <li>You can sign out at any time from the dashboard header.</li>
         <li>
-          You can decline non-essential cookies using the banner on first visit.
+          You can dismiss the cookie notice without affecting essential session
+          cookies required to sign in.
         </li>
         <li>
           You can contact us to request access to or deletion of your account

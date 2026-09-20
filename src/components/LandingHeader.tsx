@@ -4,11 +4,11 @@ import { Link } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 
 const NAV_LINKS = [
-  { label: "Product", href: "#product" },
-  { label: "How it works", href: "#how-it-works" },
-  { label: "Stack", href: "#stack" },
-  { label: "Built for LA", href: "#built-for" },
-  { label: "Security", href: "#security" },
+  { label: "Product", href: "/#product" },
+  { label: "How it works", href: "/#how-it-works" },
+  { label: "Stack", href: "/#stack" },
+  { label: "Built for LA", href: "/#built-for" },
+  { label: "Security", href: "/#security" },
 ];
 
 export function LandingHeader() {

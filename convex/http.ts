@@ -4,6 +4,7 @@ import { httpAction } from "./_generated/server";
 import { auth } from "./auth";
 import { components, internal } from "./_generated/api";
 import { verifySvixSignature } from "./lib/svix";
+import { verifySharedWebhookSecret } from "./lib/webhookAuth";
 
 const http = httpRouter();
 
@@ -16,16 +17,18 @@ http.route({
     const rawBody = await request.text();
     const webhookSecret = process.env.AGENTMAIL_WEBHOOK_SECRET;
 
-    if (webhookSecret) {
-      const verified = await verifySvixSignature(webhookSecret, rawBody, {
-        id: request.headers.get("svix-id"),
-        timestamp: request.headers.get("svix-timestamp"),
-        signature: request.headers.get("svix-signature"),
-      });
+    if (!webhookSecret) {
+      return new Response("Webhook secret not configured", { status: 503 });
+    }
 
-      if (!verified) {
-        return new Response("Invalid webhook signature", { status: 401 });
-      }
+    const verified = await verifySvixSignature(webhookSecret, rawBody, {
+      id: request.headers.get("svix-id"),
+      timestamp: request.headers.get("svix-timestamp"),
+      signature: request.headers.get("svix-signature"),
+    });
+
+    if (!verified) {
+      return new Response("Invalid webhook signature", { status: 401 });
     }
 
     let payload: {
@@ -60,6 +63,19 @@ http.route({
       return new Response("Project not found", { status: 404 });
     }
 
+    if (payload.data.message_id) {
+      const duplicate = await ctx.runQuery(
+        internal.communications.findByProviderMessageInternal,
+        {
+          projectId: project._id,
+          providerMessageId: payload.data.message_id,
+        },
+      );
+      if (duplicate) {
+        return new Response("Duplicate message ignored", { status: 200 });
+      }
+    }
+
     const body =
       payload.data.extracted_text ?? payload.data.text ?? "Inbound message received.";
 
@@ -85,6 +101,11 @@ http.route({
   path: "/webhooks/firecrawl",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
+    const webhookSecret = process.env.FIRECRAWL_WEBHOOK_SECRET;
+    if (!verifySharedWebhookSecret(request, webhookSecret)) {
+      return new Response("Unauthorized webhook", { status: 401 });
+    }
+
     const rawBody = await request.text();
 
     let payload: {

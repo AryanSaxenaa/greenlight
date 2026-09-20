@@ -72,6 +72,10 @@ export const sendApprovedEmail = internalAction({
   handler: async (ctx, args) => {
     const apiKey = process.env.AGENTMAIL_API_KEY;
     if (!apiKey) {
+      await ctx.runMutation(internal.approvals.revertToPendingInternal, {
+        approvalId: args.approvalId,
+        reason: "Email send failed: AGENTMAIL_API_KEY is not configured.",
+      });
       throw new Error("AGENTMAIL_API_KEY is not configured");
     }
 
@@ -82,55 +86,72 @@ export const sendApprovedEmail = internalAction({
       throw new Error("Approval not found");
     }
 
+    if (approval.status !== "approved") {
+      return null;
+    }
+
     const project = await ctx.runQuery(internal.projects.getInternal, {
       projectId: approval.projectId,
     });
     if (!project?.inboxId) {
+      await ctx.runMutation(internal.approvals.revertToPendingInternal, {
+        approvalId: args.approvalId,
+        reason: "Email send failed: project inbox is not provisioned.",
+      });
       throw new Error("Project inbox is not provisioned");
     }
 
-    const response = await fetch(
-      `https://api.agentmail.to/v0/inboxes/${encodeURIComponent(project.inboxId)}/messages/send`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
+    try {
+      const response = await fetch(
+        `https://api.agentmail.to/v0/inboxes/${encodeURIComponent(project.inboxId)}/messages/send`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            to: approval.toAddresses,
+            subject: approval.subject,
+            text: approval.body,
+          }),
         },
-        body: JSON.stringify({
-          to: approval.toAddresses,
-          subject: approval.subject,
-          text: approval.body,
-        }),
-      },
-    );
+      );
 
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`AgentMail send failed: ${body}`);
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`AgentMail send failed: ${body}`);
+      }
+
+      const payload = (await response.json()) as { message_id?: string };
+      await ctx.runMutation(internal.approvals.markSentInternal, {
+        approvalId: args.approvalId,
+        providerMessageId: payload.message_id,
+      });
+
+      await ctx.runMutation(internal.communications.recordOutboundInternal, {
+        projectId: approval.projectId,
+        subject: approval.subject,
+        body: approval.body,
+        toAddresses: approval.toAddresses,
+        providerMessageId: payload.message_id,
+        requirementId: approval.requirementId,
+        deliveryStatus: "delivered",
+      });
+
+      await ctx.runMutation(internal.projects.appendEventInternal, {
+        projectId: approval.projectId,
+        type: "email.sent",
+        message: `Clarification email sent: ${approval.subject}`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown send error";
+      await ctx.runMutation(internal.approvals.revertToPendingInternal, {
+        approvalId: args.approvalId,
+        reason: `Email send failed: ${message}`,
+      });
+      throw error;
     }
-
-    const payload = (await response.json()) as { message_id?: string };
-    await ctx.runMutation(internal.approvals.markSentInternal, {
-      approvalId: args.approvalId,
-      providerMessageId: payload.message_id,
-    });
-
-    await ctx.runMutation(internal.communications.recordOutboundInternal, {
-      projectId: approval.projectId,
-      subject: approval.subject,
-      body: approval.body,
-      toAddresses: approval.toAddresses,
-      providerMessageId: payload.message_id,
-      requirementId: approval.requirementId,
-      deliveryStatus: "delivered",
-    });
-
-    await ctx.runMutation(internal.projects.appendEventInternal, {
-      projectId: approval.projectId,
-      type: "email.sent",
-      message: `Clarification email sent: ${approval.subject}`,
-    });
 
     return null;
   },

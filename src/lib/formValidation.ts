@@ -1,4 +1,33 @@
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const LA_ZIP_PREFIXES = [
+  "900",
+  "901",
+  "902",
+  "903",
+  "904",
+  "905",
+  "906",
+  "907",
+  "908",
+  "910",
+  "911",
+  "912",
+  "913",
+  "914",
+  "915",
+  "916",
+  "917",
+  "918",
+];
+
+function isSupportedLosAngelesAddress(address: string): boolean {
+  const lower = address.trim().toLowerCase();
+  return (
+    lower.includes("los angeles") ||
+    /\bla\b/.test(lower) ||
+    LA_ZIP_PREFIXES.some((prefix) => lower.includes(prefix))
+  );
+}
 
 export function validateEmail(email: string): string | null {
   const trimmed = email.trim();
@@ -42,6 +71,12 @@ export function validateProjectAddress(address: string): string | null {
   }
   if (!/\d/.test(trimmed)) {
     return "Include a street number in the address.";
+  }
+  if (!trimmed.includes(",")) {
+    return "Include city and state separated by a comma.";
+  }
+  if (!isSupportedLosAngelesAddress(trimmed)) {
+    return "Jurisdiction not yet supported. Los Angeles city addresses resolve automatically.";
   }
   return null;
 }

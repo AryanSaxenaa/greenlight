@@ -25,6 +25,7 @@ Or for production: `npm run deploy` (requires confirming prod push in terminal).
 npx convex env set AGENTMAIL_API_KEY am_your_key
 npx convex env set AGENTMAIL_WEBHOOK_SECRET whsec_your_secret
 npx convex env set FIRECRAWL_API_KEY fc_your_key
+npx convex env set FIRECRAWL_WEBHOOK_SECRET choose-a-long-random-string
 ```
 
 Auth vars (`SITE_URL`, `JWT_PRIVATE_KEY`, `JWKS`) are already set on the dev deployment.
@@ -51,6 +52,14 @@ npx convex run testing/aggressiveSuite:runAggressiveSuite '{"gatewayIterations":
 2. URL: `https://handsome-bison-608.convex.site/webhooks/agentmail`
 3. Event: `message.received`
 4. Copy `whsec_...` → `npx convex env set AGENTMAIL_WEBHOOK_SECRET whsec_...`
+
+## Firecrawl webhook setup
+
+1. Generate a secret: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+2. Set it: `npx convex env set FIRECRAWL_WEBHOOK_SECRET your-secret`
+3. New projects auto-register monitors with  
+   `https://handsome-bison-608.convex.site/webhooks/firecrawl?secret=your-secret`
+4. Existing monitors created before the secret was set must be recreated (create a new project, or delete and re-run compilation).
 
 ## Local development
 

@@ -1,16 +1,23 @@
 import { useQuery } from "convex/react";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { AppPageLayout } from "../components/AppPageLayout";
 import { PageMeta } from "../components/PageMeta";
+import { authRedirectPath } from "../lib/authRedirect";
 import { projectStatusLabel } from "../lib/status";
 
 export function ProjectsPage() {
+  const location = useLocation();
   const viewer = useQuery(api.users.viewer);
   const projects = useQuery(api.projects.list, viewer ? {} : "skip");
 
   if (viewer === null) {
-    return <Navigate to="/auth" replace />;
+    return (
+      <Navigate
+        to={authRedirectPath(`${location.pathname}${location.search}`)}
+        replace
+      />
+    );
   }
 
   if (viewer === undefined || projects === undefined) {

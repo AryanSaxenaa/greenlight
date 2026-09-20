@@ -60,6 +60,28 @@ export const listInternal = internalQuery({
   },
 });
 
+export const findByProviderMessageInternal = internalQuery({
+  args: {
+    projectId: v.id("projects"),
+    providerMessageId: v.string(),
+  },
+  returns: v.union(communicationValidator, v.null()),
+  handler: async (ctx, args) => {
+    const communications = await ctx.db
+      .query("communications")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .order("desc")
+      .take(100);
+
+    return (
+      communications.find(
+        (communication) =>
+          communication.providerMessageId === args.providerMessageId,
+      ) ?? null
+    );
+  },
+});
+
 export const listExtractionsForProject = query({
   args: { projectId: v.id("projects") },
   returns: v.array(extractionValidator),
@@ -111,6 +133,23 @@ export const recordInboundInternal = internalMutation({
   },
   returns: v.id("communications"),
   handler: async (ctx, args) => {
+    if (args.providerMessageId) {
+      const recentCommunications = await ctx.db
+        .query("communications")
+        .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+        .order("desc")
+        .take(100);
+
+      const duplicate = recentCommunications.find(
+        (communication) =>
+          communication.providerMessageId === args.providerMessageId,
+      );
+
+      if (duplicate) {
+        return duplicate._id;
+      }
+    }
+
     const communicationId = await ctx.db.insert("communications", {
       projectId: args.projectId,
       direction: "inbound",
@@ -143,7 +182,7 @@ export const recordInboundInternal = internalMutation({
 
     if (args.linkedRequirementId) {
       const requirement = await ctx.db.get("requirements", args.linkedRequirementId);
-      if (requirement) {
+      if (requirement && requirement.projectId === args.projectId) {
         await ctx.db.patch("requirements", args.linkedRequirementId, {
           status: "review",
           verificationStatus: "unverified",

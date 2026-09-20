@@ -1,19 +1,26 @@
 import { useMutation, useQuery } from "convex/react";
 import { FormEvent, useMemo, useState, type ReactNode } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { AppPageLayout } from "../components/AppPageLayout";
 import { QueryErrorBoundary } from "../components/QueryErrorBoundary";
+import { authRedirectPath } from "../lib/authRedirect";
 import { formatConvexError, isConvexId } from "../lib/errors";
 import { stageLabel, statusClass, statusLabel } from "../lib/status";
 
 export function ProjectPage() {
   const { projectId } = useParams();
+  const location = useLocation();
   const viewer = useQuery(api.users.viewer);
 
   if (viewer === null) {
-    return <Navigate to="/auth" replace />;
+    return (
+      <Navigate
+        to={authRedirectPath(`${location.pathname}${location.search}`)}
+        replace
+      />
+    );
   }
 
   if (viewer === undefined) {
@@ -28,8 +35,8 @@ export function ProjectPage() {
     return (
       <AppPageLayout wide>
         <p className="error">Project not found.</p>
-        <Link className="button button-landing-secondary" to="/">
-          Back home
+        <Link className="button button-landing-secondary" to="/projects">
+          Back to dashboard
         </Link>
       </AppPageLayout>
     );
@@ -76,17 +83,24 @@ function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
   const rejectChange = useMutation(api.parameters.rejectChange);
 
   const [uploading, setUploading] = useState(false);
+  const [actionPending, setActionPending] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectedSourceId, setSelectedSourceId] = useState<Id<"sources"> | null>(null);
   const [proposedHeight, setProposedHeight] = useState("18");
 
   async function runAction(action: () => Promise<void>) {
+    if (actionPending) {
+      return;
+    }
+    setActionPending(true);
     setActionError(null);
     try {
       await action();
     } catch (caught) {
       setActionError(formatConvexError(caught));
+    } finally {
+      setActionPending(false);
     }
   }
 
@@ -114,8 +128,8 @@ function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
     return (
       <AppPageLayout wide>
         <p className="error">Project not found.</p>
-        <Link className="button button-landing-secondary" to="/">
-          Back home
+        <Link className="button button-landing-secondary" to="/projects">
+          Back to dashboard
         </Link>
       </AppPageLayout>
     );
@@ -331,6 +345,7 @@ function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
                   <button
                     className="button button-landing-primary"
                     type="button"
+                    disabled={actionPending}
                     onClick={() =>
                       void runAction(async () => {
                         await applyChange({ changeSetId: change._id });
@@ -342,6 +357,7 @@ function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
                   <button
                     className="button button-landing-secondary"
                     type="button"
+                    disabled={actionPending}
                     onClick={() =>
                       void runAction(async () => {
                         await rejectChange({ changeSetId: change._id });
@@ -517,6 +533,7 @@ function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
                   <button
                     className="button button-landing-primary"
                     type="button"
+                    disabled={actionPending}
                     onClick={() =>
                       void runAction(async () => {
                         await approveDraft({ approvalId: approval._id });
@@ -528,6 +545,7 @@ function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
                   <button
                     className="button button-landing-secondary"
                     type="button"
+                    disabled={actionPending}
                     onClick={() =>
                       void runAction(async () => {
                         await rejectDraft({ approvalId: approval._id });

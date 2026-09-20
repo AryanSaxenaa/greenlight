@@ -17,6 +17,11 @@ export function CookieConsent() {
     setVisible(false);
   }
 
+  function decline() {
+    window.localStorage.setItem(COOKIE_CONSENT_KEY, "declined");
+    setVisible(false);
+  }
+
   if (!visible) {
     return null;
   }
@@ -29,13 +34,22 @@ export function CookieConsent() {
           See our{" "}
           <Link to="/privacy">Privacy Policy</Link> for details.
         </p>
-        <button
-          className="button button-landing-primary"
-          type="button"
-          onClick={accept}
-        >
-          Accept
-        </button>
+        <div className="cookie-consent-actions">
+          <button
+            className="button button-landing-secondary"
+            type="button"
+            onClick={decline}
+          >
+            Dismiss
+          </button>
+          <button
+            className="button button-landing-primary"
+            type="button"
+            onClick={accept}
+          >
+            Accept
+          </button>
+        </div>
       </div>
     </div>
   );

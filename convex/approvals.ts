@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { getCurrentUser, requireProjectAccess } from "./lib/auth";
 import { appendEvent } from "./lib/compiler";
 import { buildClarificationDraft } from "./lib/draftEmail";
+import { validateEmailAddresses } from "./lib/emailValidation";
 
 const approvalValidator = v.object({
   _id: v.id("approvals"),
@@ -54,6 +55,14 @@ export const createClarificationDraft = mutation({
     const requirement = await ctx.db.get("requirements", args.requirementId);
     if (!requirement) {
       throw new Error("Requirement not found");
+    }
+    if (requirement.projectId !== args.projectId) {
+      throw new Error("Requirement does not belong to this project");
+    }
+
+    const emailError = validateEmailAddresses(args.toAddresses);
+    if (emailError) {
+      throw new Error(emailError);
     }
 
     await ctx.scheduler.runAfter(
@@ -122,6 +131,10 @@ export const reject = mutation({
 
     await requireProjectAccess(ctx, approval.projectId);
 
+    if (approval.status !== "pending") {
+      throw new Error("Approval is no longer pending");
+    }
+
     await ctx.db.patch("approvals", args.approvalId, {
       status: "rejected",
       resolvedAt: Date.now(),
@@ -152,6 +165,9 @@ export const seedClarificationDraftInternal = internalMutation({
     const requirement = await ctx.db.get("requirements", args.requirementId);
     if (!project || !requirement) {
       throw new Error("Project or requirement not found");
+    }
+    if (requirement.projectId !== args.projectId) {
+      throw new Error("Requirement does not belong to this project");
     }
 
     const parameters = await ctx.db
@@ -228,6 +244,9 @@ export const draftContextInternal = internalQuery({
     if (!project || !requirement) {
       return null;
     }
+    if (requirement.projectId !== args.projectId) {
+      return null;
+    }
 
     const parameters = await ctx.db
       .query("projectParameters")
@@ -277,6 +296,20 @@ export const createDraftInternal = internalMutation({
   },
   returns: v.id("approvals"),
   handler: async (ctx, args) => {
+    const pending = await ctx.db
+      .query("approvals")
+      .withIndex("by_project_and_status", (q) =>
+        q.eq("projectId", args.projectId).eq("status", "pending"),
+      )
+      .collect();
+
+    const existing = pending.find(
+      (approval) => approval.requirementId === args.requirementId,
+    );
+    if (existing) {
+      return existing._id;
+    }
+
     const approvalId = await ctx.db.insert("approvals", {
       projectId: args.projectId,
       actionType: "send_clarification_email",
@@ -338,6 +371,36 @@ export const markSentInternal = internalMutation({
       status: "sent",
       providerMessageId: args.providerMessageId,
     });
+    return null;
+  },
+});
+
+export const revertToPendingInternal = internalMutation({
+  args: {
+    approvalId: v.id("approvals"),
+    reason: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const approval = await ctx.db.get("approvals", args.approvalId);
+    if (!approval || approval.status !== "approved") {
+      return null;
+    }
+
+    await ctx.db.patch("approvals", args.approvalId, {
+      status: "pending",
+      resolvedAt: undefined,
+      resolvedBy: undefined,
+    });
+
+    await appendEvent(
+      ctx,
+      approval.projectId,
+      "approval.send_failed",
+      args.reason,
+      { actorType: "system", actorLabel: "AgentMail" },
+    );
+
     return null;
   },
 });
