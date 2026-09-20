@@ -6,4 +6,16 @@ export default defineConfig({
   server: {
     port: 5173,
   },
+  build: {
+    target: "es2020",
+    cssMinify: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ["react", "react-dom", "react-router-dom"],
+          convex: ["convex/react", "@convex-dev/auth/react"],
+        },
+      },
+    },
+  },
 });

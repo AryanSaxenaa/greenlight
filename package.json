@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "check:perf": "npm run build && node scripts/check-performance.mjs",
     "deploy": "npx @convex-dev/static-hosting deploy"
   },
   "dependencies": {

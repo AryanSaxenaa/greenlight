@@ -6,8 +6,8 @@
   --ink: #162c1e;
   --forest: #24402b;
   --forest-deep: #162c1e;
-  --sage: #6e7c68;
-  --sage-2: #a9af9c;
+  --sage: #4d5f52;
+  --sage-2: #5f6f62;
   --line: #3f5b41;
   --ochre: #b08347;
   --rule: #d5dbd0;
@@ -15,7 +15,7 @@
   --warn: #c9923f;
   --danger: #a33f3f;
   --info: #3f5b41;
-  --locked: #6e7c68;
+  --locked: #4d5f52;
   --font-sans: "IBM Plex Sans", system-ui, sans-serif;
   --font-serif: "Fraunces", Georgia, serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
@@ -1819,6 +1819,11 @@ h3 {
   }
 
   .landing-header-actions .button-landing-primary {
+    padding-inline: 0.85rem;
+    font-size: 0.82rem;
+  }
+
+  .landing-header-actions .landing-login {
     display: none;
   }
 
@@ -2241,4 +2246,93 @@ input[type="file"]::file-selector-button:hover {
 
 .project-summary {
   margin-bottom: 1rem;
+}
+
+.honeypot-field {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.field-error {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--danger);
+  font-size: 0.82rem;
+}
+
+.landing-cta-single {
+  justify-content: flex-start;
+}
+
+.cookie-consent {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 100;
+  padding: 1rem;
+  background: rgba(22, 44, 30, 0.96);
+  color: #f8f9f5;
+  border-top: 1px solid rgba(200, 230, 160, 0.2);
+}
+
+.cookie-consent-inner {
+  max-width: 72rem;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.cookie-consent p {
+  margin: 0;
+  max-width: 42rem;
+  line-height: 1.5;
+}
+
+.cookie-consent a {
+  color: #c8e6a0;
+}
+
+.legal-page-body h2 {
+  margin: 1.5rem 0 0.75rem;
+  font-size: 1.1rem;
+  color: var(--forest);
+}
+
+.legal-page-body p,
+.legal-page-body li {
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.legal-page-body ul {
+  padding-left: 1.25rem;
+}
+
+.not-found-page {
+  text-align: center;
+}
+
+.not-found-page .cta-row {
+  justify-content: center;
+}
+
+@media (max-width: 560px) {
+  .cookie-consent-inner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .landing-footer-inner {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .landing-footer-links {
+    flex-wrap: wrap;
+  }
 }

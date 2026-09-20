@@ -2,6 +2,7 @@ import { useQuery } from "convex/react";
 import { Link, Navigate } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { AppPageLayout } from "../components/AppPageLayout";
+import { PageMeta } from "../components/PageMeta";
 import { projectStatusLabel } from "../lib/status";
 
 export function ProjectsPage() {
@@ -22,6 +23,12 @@ export function ProjectsPage() {
 
   return (
     <AppPageLayout>
+      <PageMeta
+        title="Dashboard"
+        description="Manage your Los Angeles permitting projects."
+        path="/projects"
+        noIndex
+      />
       <div className="app-card">
         <p className="landing-section-kicker">Dashboard</p>
         <h2 className="app-card-title">Your projects</h2>

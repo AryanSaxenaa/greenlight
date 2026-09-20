@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://handsome-bison-608.convex.site/sitemap.xml

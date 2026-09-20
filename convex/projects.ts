@@ -177,15 +177,29 @@ export const create = mutation({
   args: {
     intent: v.string(),
     address: v.string(),
+    website: v.optional(v.string()),
   },
   returns: v.id("projects"),
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
+
+    if (args.website?.trim()) {
+      throw new Error("Unable to create project.");
+    }
+
     const intent = args.intent.trim();
     const address = args.address.trim();
 
     if (intent.length < 8) {
       throw new Error("Describe your project in at least 8 characters.");
+    }
+
+    if (intent.length > 2000) {
+      throw new Error("Project description must be 2000 characters or fewer.");
+    }
+
+    if (address.length > 300) {
+      throw new Error("Address must be 300 characters or fewer.");
     }
 
     const addressError = validateSupportedAddress(address);

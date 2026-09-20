@@ -9,13 +9,13 @@ const NAV_LINKS = [
   { label: "Stack", href: "#stack" },
   { label: "Built for LA", href: "#built-for" },
   { label: "Security", href: "#security" },
-  { label: "Docs", href: "https://github.com/AryanSaxenaa/greenlight", external: true },
 ];
 
 export function LandingHeader() {
   const viewer = useQuery(api.users.viewer);
   const { signOut } = useAuthActions();
   const signedIn = Boolean(viewer);
+  const startHref = signedIn ? "/projects/new" : "/auth";
 
   async function handleSignOut() {
     await signOut();
@@ -44,23 +44,11 @@ export function LandingHeader() {
         </Link>
 
         <nav className="landing-nav" aria-label="Main">
-          {NAV_LINKS.map((item) =>
-            item.external ? (
-              <a
-                key={item.label}
-                className="landing-nav-link"
-                href={item.href}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {item.label}
-              </a>
-            ) : (
-              <a key={item.label} className="landing-nav-link" href={item.href}>
-                {item.label}
-              </a>
-            ),
-          )}
+          {NAV_LINKS.map((item) => (
+            <a key={item.label} className="landing-nav-link" href={item.href}>
+              {item.label}
+            </a>
+          ))}
         </nav>
 
         <div className="landing-header-actions">
@@ -80,16 +68,16 @@ export function LandingHeader() {
                 className="button button-landing-primary"
                 to="/projects/new"
               >
-                New project
+                Start a project
               </Link>
             </>
           ) : (
             <>
-              <Link className="landing-login" to="/auth">
-                Log In
+              <Link className="landing-login" to="/auth?mode=signIn">
+                Log in
               </Link>
-              <Link className="button button-landing-primary" to="/auth">
-                Book A Demo
+              <Link className="button button-landing-primary" to={startHref}>
+                Start a project
               </Link>
             </>
           )}

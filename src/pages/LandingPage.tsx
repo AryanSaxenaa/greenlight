@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { LandingFooter } from "../components/LandingFooter";
 import { LandingHeader } from "../components/LandingHeader";
+import { PageMeta } from "../components/PageMeta";
 
 const SPONSORS = [
   {
@@ -182,12 +183,20 @@ export function LandingPage() {
 
   return (
     <div className="page page-landing">
+      <PageMeta
+        title="Know what the city requires"
+        description="AI permitting agent for Los Angeles residential work — ADUs, garage conversions, and small additions."
+        path="/"
+      />
       <div className="landing-hero-wrap">
         <div className="landing-bg" aria-hidden="true">
           <img
             className="landing-bg-image"
             src="/hero-background.jpg"
             alt=""
+            width={1920}
+            height={1080}
+            decoding="async"
             fetchPriority="high"
           />
           <div className="landing-bg-dots" />
@@ -218,18 +227,10 @@ export function LandingPage() {
                 An AI permitting agent for Los Angeles residential work, with a
                 human at every agency touchpoint.
               </p>
-              <div className="landing-cta">
+              <div className="landing-cta landing-cta-single">
                 <Link className="button button-landing-primary" to={startHref}>
                   Start a project
                 </Link>
-                <a
-                  className="button button-landing-secondary"
-                  href="https://github.com/AryanSaxenaa/greenlight"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  View repository
-                </a>
               </div>
             </div>
 
@@ -480,19 +481,16 @@ export function LandingPage() {
               Create a project in minutes. Greenlight compiles your permit graph and
               opens your control room automatically.
             </p>
-            <div className="landing-cta">
+            <div className="landing-cta landing-cta-single">
               <Link className="button button-landing-primary" to={startHref}>
                 Start a project
-              </Link>
-              <Link className="button button-landing-secondary" to="/auth">
-                Create account
               </Link>
             </div>
           </div>
           </div>
         </section>
 
-        <LandingFooter signedIn={signedIn} />
+        <LandingFooter />
       </div>
     </div>
   );

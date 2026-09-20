@@ -11,6 +11,17 @@ if (!convexUrl) {
   throw new Error("Missing VITE_CONVEX_URL. Run npx convex dev to configure.");
 }
 
+if (
+  typeof window !== "undefined" &&
+  window.location.protocol === "http:" &&
+  window.location.hostname !== "localhost" &&
+  window.location.hostname !== "127.0.0.1"
+) {
+  window.location.replace(
+    window.location.href.replace(/^http:/, "https:"),
+  );
+}
+
 const convex = new ConvexReactClient(convexUrl);
 
 createRoot(document.getElementById("root")!).render(
