@@ -20,7 +20,7 @@ export const scrapeProjectSources = internalAction({
       message: "Crawling official LA permitting sources.",
     });
 
-    const { sources } = await ctx.runQuery(internal.sources.listInternal, {
+    await ctx.runQuery(internal.sources.listInternal, {
       projectId: args.projectId,
     });
 

@@ -6,6 +6,8 @@ import { completeAgentRun, startAgentRun } from "./lib/agentRuns";
 
 const parameterValidator = v.object({
   _id: v.id("projectParameters"),
+  _creationTime: v.number(),
+  projectId: v.id("projects"),
   key: v.string(),
   value: v.string(),
   unit: v.optional(v.string()),
@@ -21,6 +23,8 @@ const parameterValidator = v.object({
 
 const changeSetValidator = v.object({
   _id: v.id("changeSets"),
+  _creationTime: v.number(),
+  projectId: v.id("projects"),
   parameterKey: v.string(),
   previousValue: v.string(),
   proposedValue: v.string(),
@@ -29,7 +33,10 @@ const changeSetValidator = v.object({
   requirementsInvalidated: v.number(),
   documentsAffected: v.number(),
   blockerCreated: v.optional(v.string()),
+  affectedRequirementIds: v.array(v.id("requirements")),
+  affectedDocumentIds: v.array(v.id("documents")),
   createdAt: v.number(),
+  appliedAt: v.optional(v.number()),
 });
 
 export const listForProject = query({

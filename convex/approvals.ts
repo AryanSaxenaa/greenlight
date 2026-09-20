@@ -65,7 +65,7 @@ export const createClarificationDraft = mutation({
       project,
       requirement,
       parameters,
-      recipientEmail: args.toAddresses[0],
+      recipientEmail: args.toAddresses[0] ?? "",
     });
 
     const approvalId = await ctx.db.insert("approvals", {

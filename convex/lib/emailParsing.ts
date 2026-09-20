@@ -87,7 +87,7 @@ export function parseInboundEmail(
     extractions.push({
       extractionType: "requirement_impact",
       value: linkedRequirement.title,
-      confidence: Math.min(0.95, 0.5 + ranked[0].score * 0.15),
+      confidence: Math.min(0.95, 0.5 + (ranked[0]?.score ?? 0) * 0.15),
     });
   }
 

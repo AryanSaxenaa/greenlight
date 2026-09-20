@@ -3,16 +3,17 @@
 - **Project:** Greenlight
 - **Event:** Convex All Gas Hackathon
 - **What it does:** An AI permitting agent that turns a construction project into an executable path to approval.
-- **Live app:** not deployed
+- **Live app:** https://handsome-bison-608.convex.site
 - **Repo:** https://github.com/AryanSaxenaa/greenlight
-- **Frontend:** Convex static hosting
-- **Convex deployment:** not deployed
+- **Frontend:** Convex static hosting (`@convex-dev/static-hosting`)
+- **Convex deployment:** dev:handsome-bison-608 (https://handsome-bison-608.convex.cloud)
+- **AgentMail webhook:** https://handsome-bison-608.convex.site/webhooks/agentmail
 - **Components:** @convex-dev/auth
 - **Convex features:** schema, indexes, queries, mutations, internal mutations, actions, scheduled functions, HTTP actions, file storage, realtime queries
 - **Auth:** Convex Auth
 - **AI models:** none
 - **Started:** 2026-09-19T10:33:06Z
-- **Last updated:** 2026-09-19T12:45:00Z
+- **Last updated:** 2026-09-20T06:40:00Z
 
 ## Log
 
@@ -30,3 +31,6 @@ Added requirement extraction from scraped official sources, Firecrawl monitor we
 
 ### 2026-09-19 - f3cd9c8
 Addressed PlanGreenlight audit gaps: evidence discipline on requirements, real compiler stage sequencing, full snapshot storage, dependency graph, change impact compiler, inbound email decision extraction, fact-based clarification drafts, readiness recomputation, agent run logging, and expanded control room UI.
+
+### 2026-09-20 - deployment
+Deployed Greenlight to Convex Sites at https://handsome-bison-608.convex.site using `@convex-dev/static-hosting`. Fixed Convex Auth JWT key format for cloud sign-in, query return validators for parameters/agent runs, and verified core §55 flow: auth → create ADU project → compiler → change impact propose/apply. Pending: `FIRECRAWL_API_KEY` + `AGENTMAIL_API_KEY` on cloud for full scrape/monitor/email demo, demo video, vibeapps.dev submission.

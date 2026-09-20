@@ -5,6 +5,8 @@ import { completeAgentRun, startAgentRun } from "./lib/agentRuns";
 
 const agentRunValidator = v.object({
   _id: v.id("agentRuns"),
+  _creationTime: v.number(),
+  projectId: v.id("projects"),
   actionType: v.string(),
   trigger: v.string(),
   status: v.union(

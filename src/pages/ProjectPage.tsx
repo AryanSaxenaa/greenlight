@@ -114,6 +114,9 @@ export function ProjectPage() {
         status: "missing",
         verificationStatus: "unknown",
         isPrimaryBlocker: false,
+        sourceLabel: undefined,
+        sourceUrl: undefined,
+        sourceExcerpt: undefined,
       },
     );
     childrenByParent.set(edge.fromNodeKey, children);

@@ -556,7 +556,10 @@ async function finalizeProject(ctx: MutationCtx, projectId: Id<"projects">) {
     .collect();
 
   const owner = await ctx.db.get("users", project.userId);
-  const recipientEmail = owner?.email ?? project.inboxEmail;
+  const recipientEmail =
+    process.env.CLARIFICATION_TEST_RECIPIENT ??
+    owner?.email ??
+    project.inboxEmail;
 
   if (!recipientEmail) {
     return;

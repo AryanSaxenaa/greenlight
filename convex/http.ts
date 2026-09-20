@@ -1,7 +1,8 @@
+import { registerStaticRoutes } from "@convex-dev/static-hosting";
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { auth } from "./auth";
-import { internal } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import { parseInboundEmail } from "./lib/emailParsing";
 import { verifySvixSignature } from "./lib/svix";
 
@@ -178,5 +179,7 @@ http.route({
     return new Response("OK", { status: 200 });
   }),
 });
+
+registerStaticRoutes(http, components.staticHosting);
 
 export default http;
