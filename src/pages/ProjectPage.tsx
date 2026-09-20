@@ -3,6 +3,7 @@ import { FormEvent, useMemo, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { AppHeader } from "../components/AppHeader";
 import { stageLabel, statusClass, statusLabel } from "../lib/status";
 
 export function ProjectPage() {
@@ -80,19 +81,23 @@ export function ProjectPage() {
 
   if (data === undefined) {
     return (
-      <div className="shell">
-        <p className="muted">Loading project...</p>
+      <div className="page">
+        <div className="shell">
+          <p className="muted">Loading project...</p>
+        </div>
       </div>
     );
   }
 
   if (data === null) {
     return (
-      <div className="shell">
-        <p className="error">Project not found.</p>
-        <Link className="button button-secondary" to="/">
-          Back home
-        </Link>
+      <div className="page">
+        <div className="shell">
+          <p className="error">Project not found.</p>
+          <Link className="button button-secondary" to="/">
+            Back home
+          </Link>
+        </div>
       </div>
     );
   }
@@ -189,16 +194,20 @@ export function ProjectPage() {
   }
 
   return (
-    <div className="shell">
-      <header className="topbar">
-        <Link className="brand" to="/">
-          <span className="brand-mark" aria-hidden="true" />
-          <span>GREENLIGHT</span>
-        </Link>
-        <div className="mono muted">
-          {project.address} · {project.status}
-        </div>
-      </header>
+    <div className="page page-project">
+      <div className="shell">
+        <AppHeader
+          meta={
+            <span className="mono muted">
+              {project.address} · {project.status}
+            </span>
+          }
+          action={
+            <Link className="button button-secondary button-sm" to="/projects/new">
+              New project
+            </Link>
+          }
+        />
 
       {project.status === "compiling" ? (
         <div className="compiling-banner" style={{ marginBottom: "1rem" }}>
@@ -207,9 +216,10 @@ export function ProjectPage() {
         </div>
       ) : null}
 
-      <section className="panel" style={{ marginBottom: "1rem" }}>
+      <section className="panel project-summary" style={{ marginBottom: "1rem" }}>
         <div className="header-grid">
           <div>
+            <p className="eyebrow">Control room</p>
             <h2 style={{ marginBottom: "0.35rem" }}>{project.title}</h2>
             <p className="muted" style={{ margin: 0 }}>{project.intent}</p>
             <p className="mono muted" style={{ marginTop: "0.75rem" }}>
@@ -556,6 +566,7 @@ export function ProjectPage() {
             </div>
           ))}
         </aside>
+      </div>
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import { useMutation, useQuery } from "convex/react";
 import { FormEvent, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
+import { AppHeader } from "../components/AppHeader";
 
 export function NewProjectPage() {
   const navigate = useNavigate();
@@ -22,8 +23,10 @@ export function NewProjectPage() {
 
   if (viewer === undefined) {
     return (
-      <div className="shell">
-        <p className="muted">Checking session...</p>
+      <div className="page">
+        <div className="shell">
+          <p className="muted">Checking session...</p>
+        </div>
       </div>
     );
   }
@@ -44,60 +47,64 @@ export function NewProjectPage() {
   }
 
   return (
-    <div className="shell">
-      <header className="topbar">
-        <Link className="brand" to="/">
-          <span className="brand-mark" aria-hidden="true" />
-          <span>GREENLIGHT</span>
-        </Link>
-      </header>
-
-      <main className="panel" style={{ maxWidth: "720px" }}>
-        <h2>What are you trying to build?</h2>
-        <p className="muted">
-          Start with natural language. Los Angeles city addresses are supported
-          in this MVP. Greenlight resolves jurisdiction, crawls official
-          sources, and compiles your permit graph.
-        </p>
-
-        <form className="form-grid" onSubmit={onSubmit}>
-          <label>
-            Project intent
-            <textarea
-              value={intent}
-              onChange={(event) => setIntent(event.target.value)}
-              required
-              minLength={8}
-            />
-          </label>
-
-          <label>
-            Property address
-            <input
-              value={address}
-              onChange={(event) => setAddress(event.target.value)}
-              required
-              minLength={5}
-              placeholder="Street, city, state"
-            />
-          </label>
-
-          {error ? <p className="error">{error}</p> : null}
-
-          <div className="cta-row">
-            <button
-              className="button button-primary"
-              type="submit"
-              disabled={submitting}
-            >
-              {submitting ? "Compiling..." : "Compile project"}
-            </button>
-            <Link className="button button-secondary" to="/">
+    <div className="page page-form">
+      <div className="shell">
+        <AppHeader
+          action={
+            <Link className="button button-ghost button-sm" to="/">
               Back
             </Link>
-          </div>
-        </form>
-      </main>
+          }
+        />
+
+        <main className="panel">
+          <p className="eyebrow">New project</p>
+          <h2>What are you trying to build?</h2>
+          <p className="panel-lead">
+            Start with natural language. Los Angeles city addresses are supported
+            in this MVP. Greenlight resolves jurisdiction, crawls official
+            sources, and compiles your permit graph.
+          </p>
+
+          <form className="form-grid" onSubmit={onSubmit}>
+            <label>
+              Project intent
+              <textarea
+                value={intent}
+                onChange={(event) => setIntent(event.target.value)}
+                required
+                minLength={8}
+              />
+            </label>
+
+            <label>
+              Property address
+              <input
+                value={address}
+                onChange={(event) => setAddress(event.target.value)}
+                required
+                minLength={5}
+                placeholder="Street, city, state"
+              />
+            </label>
+
+            {error ? <p className="error">{error}</p> : null}
+
+            <div className="cta-row">
+              <button
+                className="button button-primary"
+                type="submit"
+                disabled={submitting}
+              >
+                {submitting ? "Compiling..." : "Compile project"}
+              </button>
+              <Link className="button button-secondary" to="/">
+                Cancel
+              </Link>
+            </div>
+          </form>
+        </main>
+      </div>
     </div>
   );
 }

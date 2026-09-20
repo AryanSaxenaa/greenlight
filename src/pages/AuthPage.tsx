@@ -3,6 +3,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import { AppHeader } from "../components/AppHeader";
 
 export function AuthPage() {
   const navigate = useNavigate();
@@ -40,72 +41,80 @@ export function AuthPage() {
   }
 
   return (
-    <div className="shell">
-      <header className="topbar">
-        <Link className="brand" to="/">
-          <span className="brand-mark" aria-hidden="true" />
-          <span>GREENLIGHT</span>
-        </Link>
-      </header>
+    <div className="page page-narrow">
+      <div className="shell">
+        <AppHeader
+          action={
+            <Link className="button button-ghost button-sm" to="/">
+              Back
+            </Link>
+          }
+        />
 
-      <main className="panel" style={{ maxWidth: "480px" }}>
-        <h2>{mode === "signUp" ? "Create account" : "Sign in"}</h2>
-        <p className="muted">
-          Authentication is required before creating a permitting project.
-        </p>
+        <main className="panel">
+          <p className="eyebrow">Account</p>
+          <h2>{mode === "signUp" ? "Create account" : "Sign in"}</h2>
+          <p className="panel-lead">
+            Authentication is required before creating a permitting project.
+          </p>
 
-        <form className="form-grid" onSubmit={onSubmit}>
-          <label>
-            Email
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-              autoComplete="email"
-            />
-          </label>
+          <form className="form-grid" onSubmit={onSubmit}>
+            <label>
+              Email
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+                autoComplete="email"
+                placeholder="you@example.com"
+              />
+            </label>
 
-          <label>
-            Password
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-              minLength={8}
-              autoComplete={
-                mode === "signUp" ? "new-password" : "current-password"
-              }
-            />
-          </label>
+            <label>
+              Password
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                minLength={8}
+                autoComplete={
+                  mode === "signUp" ? "new-password" : "current-password"
+                }
+                placeholder="At least 8 characters"
+              />
+            </label>
 
-          {error ? <p className="error">{error}</p> : null}
+            {error ? <p className="error">{error}</p> : null}
 
-          <div className="cta-row">
-            <button
-              className="button button-primary"
-              type="submit"
-              disabled={submitting}
-            >
-              {submitting
-                ? "Working..."
-                : mode === "signUp"
-                  ? "Create account"
-                  : "Sign in"}
-            </button>
-            <button
-              className="button button-secondary"
-              type="button"
-              onClick={() =>
-                setMode((current) => (current === "signUp" ? "signIn" : "signUp"))
-              }
-            >
-              {mode === "signUp" ? "Use existing account" : "Create account"}
-            </button>
-          </div>
-        </form>
-      </main>
+            <div className="cta-row">
+              <button
+                className="button button-primary"
+                type="submit"
+                disabled={submitting}
+              >
+                {submitting
+                  ? "Working..."
+                  : mode === "signUp"
+                    ? "Create account"
+                    : "Sign in"}
+              </button>
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={() =>
+                  setMode((current) =>
+                    current === "signUp" ? "signIn" : "signUp",
+                  )
+                }
+              >
+                {mode === "signUp" ? "Use existing account" : "Create account"}
+              </button>
+            </div>
+          </form>
+        </main>
+      </div>
     </div>
   );
 }
