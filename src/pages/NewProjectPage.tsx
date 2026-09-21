@@ -3,6 +3,7 @@ import { FormEvent, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { AppPageLayout } from "../components/AppPageLayout";
+import { DashPageHeader } from "../components/DashPageHeader";
 import { HoneypotField } from "../components/HoneypotField";
 import { PageMeta } from "../components/PageMeta";
 import { authRedirectPath } from "../lib/authRedirect";
@@ -92,13 +93,16 @@ export function NewProjectPage() {
         path="/projects/new"
         noIndex
       />
-      <div className="app-card app-card-narrow">
-        <p className="landing-section-kicker">New project</p>
-        <h2 className="app-card-title">What are you trying to build?</h2>
-        <p className="app-card-lead">
-          Describe your project in plain language. Greenlight resolves your LA
-          jurisdiction, crawls official sources, and compiles your live permit
-          graph.
+
+      <DashPageHeader
+        title="New project"
+        description="Describe your Los Angeles residential project in plain language. Greenlight resolves jurisdiction, crawls official sources, and compiles your permit graph."
+      />
+
+      <div className="dash-form-card">
+        <h2 className="dash-section-title">What are you trying to build?</h2>
+        <p className="muted dash-form-lead">
+          Use the demo defaults for a quick walkthrough, or enter your own address and intent.
         </p>
 
         <form className="form-grid" onSubmit={onSubmit} noValidate>

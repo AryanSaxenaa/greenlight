@@ -3,6 +3,7 @@ import { internalMutation, internalQuery, mutation, query } from "./_generated/s
 import { v } from "convex/values";
 import { getCurrentUser, requireProjectAccess } from "./lib/auth";
 import { appendEvent, recomputeProjectMetrics } from "./lib/compiler";
+import { applyEvidenceStatusForRequirement } from "./lib/evidenceStatus";
 
 const factValidator = v.object({
   label: v.string(),
@@ -135,6 +136,14 @@ export const applyExtractionInternal = internalMutation({
       extractedFacts: args.facts,
     });
 
+    const project = await ctx.db.get("projects", args.projectId);
+    if (project) {
+      await ctx.runMutation(internal.requirements.ensurePathwayInternal, {
+        projectId: args.projectId,
+        intent: project.intent,
+      });
+    }
+
     const priorLinks = await ctx.db
       .query("evidenceLinks")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
@@ -167,32 +176,13 @@ export const applyExtractionInternal = internalMutation({
           createdAt: Date.now(),
         });
       }
+
+      await applyEvidenceStatusForRequirement(ctx, requirement, nodeKey);
     }
 
-    for (const nodeKey of args.nodeKeys) {
-      const requirement = requirements.find((item) => item.nodeKey === nodeKey);
-      if (!requirement) {
-        continue;
-      }
-      if (requirement.status === "missing") {
-        await ctx.db.patch("requirements", requirement._id, {
-          status: "review",
-          verificationStatus: "unverified",
-        });
-      }
-      if (nodeKey === "site_plan" && requirement.status === "review") {
-        const evidence = await ctx.db
-          .query("evidenceLinks")
-          .withIndex("by_requirement", (q) => q.eq("requirementId", requirement._id))
-          .take(2);
-        if (evidence.length >= 2) {
-          await ctx.db.patch("requirements", requirement._id, {
-            status: "verified",
-            verificationStatus: "known",
-          });
-        }
-      }
-    }
+    await ctx.runMutation(internal.requirements.applyOfficialLookupsInternal, {
+      projectId: args.projectId,
+    });
 
     await recomputeProjectMetrics(ctx, args.projectId);
 

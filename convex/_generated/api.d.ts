@@ -23,6 +23,7 @@ import type * as integrations_openaiActions from "../integrations/openaiActions.
 import type * as lib_agentRuns from "../lib/agentRuns.js";
 import type * as lib_aiExamples from "../lib/aiExamples.js";
 import type * as lib_aiGateway from "../lib/aiGateway.js";
+import type * as lib_aiNormalize from "../lib/aiNormalize.js";
 import type * as lib_aiPrompts from "../lib/aiPrompts.js";
 import type * as lib_aiSchemas from "../lib/aiSchemas.js";
 import type * as lib_auth from "../lib/auth.js";
@@ -67,6 +68,7 @@ declare const fullApi: ApiFromModules<{
   "lib/agentRuns": typeof lib_agentRuns;
   "lib/aiExamples": typeof lib_aiExamples;
   "lib/aiGateway": typeof lib_aiGateway;
+  "lib/aiNormalize": typeof lib_aiNormalize;
   "lib/aiPrompts": typeof lib_aiPrompts;
   "lib/aiSchemas": typeof lib_aiSchemas;
   "lib/auth": typeof lib_auth;

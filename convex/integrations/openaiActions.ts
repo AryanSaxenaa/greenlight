@@ -9,7 +9,12 @@ import {
   buildInboundEmailPrompt,
   buildRequirementsExtractionPrompt,
 } from "../lib/aiPrompts";
-import { generateStructuredWithGateway, formatAiError } from "../lib/aiGateway";
+import {
+  generateStructuredWithGateway,
+  formatAiError,
+  StructuredParseError,
+} from "../lib/aiGateway";
+import { salvageRequirementsExtraction } from "../lib/aiNormalize";
 import {
   CLARIFICATION_DRAFT_JSON_EXAMPLE,
   DOCUMENT_FACTS_JSON_EXAMPLE,
@@ -25,8 +30,7 @@ import {
 } from "../lib/aiSchemas";
 import { parseInboundEmail } from "../lib/emailParsing";
 import {
-  baseRequirements,
-  dedupeRequirements,
+  mergeRequirements,
   extractRequirementsFromMarkdown,
   type ExtractedRequirement,
 } from "../lib/requirementExtraction";
@@ -55,6 +59,7 @@ export const extractRequirementsWithAI = internalAction({
         const { data: object } = await generateStructuredWithGateway({
           schema: requirementsExtractionSchema,
           jsonExample: REQUIREMENTS_JSON_EXAMPLE,
+          salvage: salvageRequirementsExtraction,
           prompt: buildRequirementsExtractionPrompt({
             projectIntent: project.intent,
             address: project.normalizedAddress ?? project.address,
@@ -65,7 +70,12 @@ export const extractRequirementsWithAI = internalAction({
         aiRequirements = object.requirements;
         aiUsed = true;
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown AI error";
+        const message =
+          error instanceof StructuredParseError
+            ? "Model returned invalid requirement fields; using official-source rules."
+            : error instanceof Error
+              ? error.message
+              : "Unknown AI error";
         await ctx.runMutation(internal.projects.appendEventInternal, {
           projectId: args.projectId,
           type: "ai.extraction_fallback",
@@ -76,25 +86,27 @@ export const extractRequirementsWithAI = internalAction({
       }
     }
 
-    const regexRequirements: ExtractedRequirement[] = [...baseRequirements()];
+    const regexRequirements: ExtractedRequirement[] = [];
     for (const source of sourceBundle.sources) {
       regexRequirements.push(
         ...extractRequirementsFromMarkdown(source.markdown, source.key),
       );
     }
 
-    const merged = dedupeRequirements([
-      ...baseRequirements(),
-      ...aiRequirements,
-      ...regexRequirements.filter(
-        (row) => !baseRequirements().some((base) => base.nodeKey === row.nodeKey),
-      ),
-    ]);
+    const merged = mergeRequirements(project.intent, aiRequirements, regexRequirements);
 
     await ctx.runMutation(internal.requirements.applyExtractedInternal, {
       projectId: args.projectId,
       requirements: merged,
       aiUsed,
+    });
+
+    await ctx.runMutation(internal.requirements.applyOfficialLookupsInternal, {
+      projectId: args.projectId,
+    });
+
+    await ctx.runMutation(internal.requirements.relinkDocumentsInternal, {
+      projectId: args.projectId,
     });
 
     await ctx.runMutation(internal.projects.completeCompilationAfterRequirements, {

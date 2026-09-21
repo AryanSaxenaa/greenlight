@@ -6,7 +6,14 @@ import { appendEvent, recomputeProjectMetrics } from "./lib/compiler";
 import { PERMIT_GRAPH_EDGES } from "./lib/dependencies";
 import {
   type ExtractedRequirement,
+  mergeRequirements,
 } from "./lib/requirementExtraction";
+import {
+  collectDocumentFacts,
+  parseOfficialLookups,
+} from "./lib/officialLookup";
+import { requirementNodeKeysForDocumentType } from "./lib/documentExtraction";
+import { applyEvidenceStatusForRequirement } from "./lib/evidenceStatus";
 import { completeAgentRun, startAgentRun } from "./lib/agentRuns";
 
 const requirementListItem = v.object({
@@ -83,21 +90,12 @@ export const applyExtractedInternal = internalMutation({
     const existing = await ctx.db
       .query("requirements")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-      .take(1);
+      .collect();
 
-    if (existing.length > 0) {
-      return null;
-    }
-
-    const runId = await startAgentRun(
-      ctx,
-      args.projectId,
-      "extract_requirements",
-      "compiler",
-      args.aiUsed
-        ? "Extracting structured requirements with OpenAI via Convex AI Gateway."
-        : "Extracting structured requirements from official sources.",
+    const existingByKey = new Map(
+      existing.map((requirement) => [requirement.nodeKey, requirement]),
     );
+    const isFirstRun = existing.length === 0;
 
     const sources = await ctx.db
       .query("sources")
@@ -105,88 +103,355 @@ export const applyExtractedInternal = internalMutation({
       .collect();
 
     const sourceIds = new Map(sources.map((source) => [source.key, source._id]));
-    await insertRequirements(
+    const rows = args.requirements as ExtractedRequirement[];
+
+    let runId: Id<"agentRuns"> | null = null;
+    if (isFirstRun) {
+      runId = await startAgentRun(
+        ctx,
+        args.projectId,
+        "extract_requirements",
+        "compiler",
+        args.aiUsed
+          ? "Extracting structured requirements with OpenAI via Convex AI Gateway."
+          : "Extracting structured requirements from official sources.",
+      );
+    }
+
+    const inserted = await upsertRequirements(
       ctx,
       args.projectId,
-      args.requirements as ExtractedRequirement[],
+      rows,
       sourceIds,
       sources,
+      existingByKey,
     );
 
+    const allRequirements = await ctx.db
+      .query("requirements")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
     await ctx.db.patch("projects", args.projectId, {
-      rulesExtracted: args.requirements.length,
+      rulesExtracted: allRequirements.length,
       updatedAt: Date.now(),
     });
 
-    await appendEvent(
-      ctx,
-      args.projectId,
-      args.aiUsed ? "ai.requirements_extracted" : "requirements.extracted",
-      args.aiUsed
-        ? `OpenAI extracted ${args.requirements.length} structured requirements from official sources.`
-        : `Extracted ${args.requirements.length} structured requirements from official sources.`,
-      {
-        actorType: "agent",
-        actorLabel: args.aiUsed ? "OpenAI via Convex AI Gateway" : "Requirement extractor",
-      },
-    );
+    await recomputeProjectMetrics(ctx, args.projectId);
+    await seedDependenciesForProject(ctx, args.projectId, { emitEvent: !isFirstRun && inserted === 0 });
 
-    await completeAgentRun(
-      ctx,
-      runId,
-      args.aiUsed
-        ? `OpenAI extracted ${args.requirements.length} requirements.`
-        : `Extracted ${args.requirements.length} requirements.`,
-    );
+    if (runId) {
+      await appendEvent(
+        ctx,
+        args.projectId,
+        args.aiUsed ? "ai.requirements_extracted" : "requirements.extracted",
+        args.aiUsed
+          ? `OpenAI extracted ${allRequirements.length} structured requirements from official sources.`
+          : `Extracted ${allRequirements.length} structured requirements from official sources.`,
+        {
+          actorType: "agent",
+          actorLabel: args.aiUsed ? "OpenAI via Convex AI Gateway" : "Requirement extractor",
+        },
+      );
+
+      await completeAgentRun(
+        ctx,
+        runId,
+        args.aiUsed
+          ? `OpenAI extracted ${allRequirements.length} requirements.`
+          : `Extracted ${allRequirements.length} requirements.`,
+      );
+    } else if (inserted > 0) {
+      await appendEvent(
+        ctx,
+        args.projectId,
+        args.aiUsed ? "ai.requirements_updated" : "requirements.updated",
+        `Added ${inserted} requirements from official sources.`,
+        {
+          actorType: "agent",
+          actorLabel: args.aiUsed ? "OpenAI via Convex AI Gateway" : "Requirement extractor",
+        },
+      );
+    }
 
     return null;
   },
 });
 
-export const seedDependencies = internalMutation({
+export const ensurePathwayInternal = internalMutation({
+  args: {
+    projectId: v.id("projects"),
+    intent: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const merged = mergeRequirements(args.intent, [], []);
+    await upsertRequirementsFromRows(ctx, args.projectId, merged);
+    await seedDependenciesForProject(ctx, args.projectId, { emitEvent: false });
+    await recomputeProjectMetrics(ctx, args.projectId);
+    return null;
+  },
+});
+
+export const applyOfficialLookupsInternal = internalMutation({
   args: { projectId: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("dependencies")
-      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-      .take(1);
-
-    if (existing.length > 0) {
+    const project = await ctx.db.get("projects", args.projectId);
+    if (!project) {
       return null;
     }
+
+    const sources = await ctx.db
+      .query("sources")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    const bundledSources = [];
+    for (const source of sources) {
+      const latest = await ctx.db
+        .query("sourceSnapshots")
+        .withIndex("by_source", (q) => q.eq("sourceId", source._id))
+        .order("desc")
+        .take(1);
+      const snapshot = latest[0];
+      if (!snapshot) {
+        continue;
+      }
+      bundledSources.push({
+        key: source.key,
+        markdown: snapshot.markdownPreview,
+        healthStatus: source.healthStatus,
+      });
+    }
+
+    const documents = await ctx.db
+      .query("documents")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    const signals = parseOfficialLookups({
+      address: project.normalizedAddress ?? project.address,
+      jurisdiction: project.jurisdiction,
+      sources: bundledSources,
+      documentFacts: collectDocumentFacts(documents),
+    });
 
     const requirements = await ctx.db
       .query("requirements")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .collect();
 
-    const nodeKeys = new Set(requirements.map((requirement) => requirement.nodeKey));
+    if (signals.propertyVerified) {
+      const property = requirements.find((requirement) => requirement.nodeKey === "property");
+      if (property && property.status !== "verified") {
+        await ctx.db.patch("requirements", property._id, {
+          status: "verified",
+          verificationStatus: "known",
+          blockedReason: signals.propertyNote,
+        });
+      }
+    }
 
-    for (const edge of PERMIT_GRAPH_EDGES) {
-      if (!nodeKeys.has(edge.fromNodeKey) || !nodeKeys.has(edge.toNodeKey)) {
-        continue;
+    if (signals.zoningVerified && signals.zoningCode) {
+      const zoning = requirements.find((requirement) => requirement.nodeKey === "zoning");
+      if (zoning && zoning.status !== "verified") {
+        await ctx.db.patch("requirements", zoning._id, {
+          status: "verified",
+          verificationStatus: "known",
+          blockedReason: signals.zoningNote,
+          sourceExcerpt: `Zoning: ${signals.zoningCode}`,
+        });
       }
 
-      await ctx.db.insert("dependencies", {
-        projectId: args.projectId,
-        fromNodeKey: edge.fromNodeKey,
-        toNodeKey: edge.toNodeKey,
-        relationship: edge.relationship,
+      await ctx.db.patch("projects", args.projectId, {
+        zoning: signals.zoningCode,
+        updatedAt: Date.now(),
       });
     }
 
+    await recomputeProjectMetrics(ctx, args.projectId);
+    return null;
+  },
+});
+
+export const relinkDocumentsInternal = internalMutation({
+  args: { projectId: v.id("projects") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const documents = await ctx.db
+      .query("documents")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    for (const document of documents) {
+      if (!document.extractedFacts || document.extractedFacts.length === 0) {
+        continue;
+      }
+
+      await relinkDocumentEvidence(ctx, {
+        projectId: args.projectId,
+        documentId: document._id,
+        facts: document.extractedFacts,
+        nodeKeys: requirementNodeKeysForDocumentType(document.documentType),
+      });
+    }
+
+    await recomputeProjectMetrics(ctx, args.projectId);
+    return null;
+  },
+});
+
+async function relinkDocumentEvidence(
+  ctx: MutationCtx,
+  args: {
+    projectId: Id<"projects">;
+    documentId: Id<"documents">;
+    facts: Array<{ label: string; value: string; confidence?: number }>;
+    nodeKeys: string[];
+  },
+) {
+  const priorLinks = await ctx.db
+    .query("evidenceLinks")
+    .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+    .collect();
+
+  for (const link of priorLinks) {
+    if (link.documentId === args.documentId) {
+      await ctx.db.delete("evidenceLinks", link._id);
+    }
+  }
+
+  const requirements = await ctx.db
+    .query("requirements")
+    .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+    .collect();
+
+  for (const nodeKey of args.nodeKeys) {
+    const requirement = requirements.find((item) => item.nodeKey === nodeKey);
+    if (!requirement) {
+      continue;
+    }
+
+    for (const fact of args.facts) {
+      await ctx.db.insert("evidenceLinks", {
+        projectId: args.projectId,
+        documentId: args.documentId,
+        requirementId: requirement._id,
+        fact: `${fact.label}: ${fact.value}`,
+        confidence: fact.confidence ?? 0.8,
+        createdAt: Date.now(),
+      });
+    }
+
+    await applyEvidenceStatusForRequirement(ctx, requirement, nodeKey);
+  }
+}
+
+async function upsertRequirementsFromRows(
+  ctx: MutationCtx,
+  projectId: Id<"projects">,
+  rows: ExtractedRequirement[],
+) {
+  const existing = await ctx.db
+    .query("requirements")
+    .withIndex("by_project", (q) => q.eq("projectId", projectId))
+    .collect();
+
+  const existingByKey = new Map(
+    existing.map((requirement) => [requirement.nodeKey, requirement]),
+  );
+
+  const sources = await ctx.db
+    .query("sources")
+    .withIndex("by_project", (q) => q.eq("projectId", projectId))
+    .collect();
+
+  const sourceIds = new Map(sources.map((source) => [source.key, source._id]));
+
+  await upsertRequirements(
+    ctx,
+    projectId,
+    rows,
+    sourceIds,
+    sources,
+    existingByKey,
+  );
+}
+
+export const seedDependencies = internalMutation({
+  args: { projectId: v.id("projects") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await seedDependenciesForProject(ctx, args.projectId, { emitEvent: true });
+    return null;
+  },
+});
+
+async function seedDependenciesForProject(
+  ctx: MutationCtx,
+  projectId: Id<"projects">,
+  options: { emitEvent: boolean },
+) {
+  const requirements = await ctx.db
+    .query("requirements")
+    .withIndex("by_project", (q) => q.eq("projectId", projectId))
+    .collect();
+
+  const nodeKeys = new Set(requirements.map((requirement) => requirement.nodeKey));
+  const existingEdges = await ctx.db
+    .query("dependencies")
+    .withIndex("by_project", (q) => q.eq("projectId", projectId))
+    .collect();
+
+  const existingPairs = new Set(
+    existingEdges.map((edge) => `${edge.fromNodeKey}->${edge.toNodeKey}`),
+  );
+
+  let inserted = 0;
+  for (const edge of PERMIT_GRAPH_EDGES) {
+    if (!nodeKeys.has(edge.fromNodeKey) || !nodeKeys.has(edge.toNodeKey)) {
+      continue;
+    }
+
+    const pair = `${edge.fromNodeKey}->${edge.toNodeKey}`;
+    if (existingPairs.has(pair)) {
+      continue;
+    }
+
+    await ctx.db.insert("dependencies", {
+      projectId,
+      fromNodeKey: edge.fromNodeKey,
+      toNodeKey: edge.toNodeKey,
+      relationship: edge.relationship,
+    });
+    inserted += 1;
+  }
+
+  if (!options.emitEvent) {
+    return;
+  }
+
+  if (inserted > 0) {
     await appendEvent(
       ctx,
-      args.projectId,
+      projectId,
+      "graph.compiled",
+      inserted === 1
+        ? "Permit dependency graph updated with a new edge."
+        : `Permit dependency graph updated with ${inserted} new edges.`,
+      { actorType: "agent", actorLabel: "Dependency compiler" },
+    );
+  } else if (existingEdges.length === 0) {
+    await appendEvent(
+      ctx,
+      projectId,
       "graph.compiled",
       "Permit dependency graph compiled.",
       { actorType: "agent", actorLabel: "Dependency compiler" },
     );
-
-    return null;
-  },
-});
+  }
+}
 
 export const reevaluateFromSourceChange = internalMutation({
   args: {
@@ -273,18 +538,7 @@ export const applyEvidenceToRequirements = internalMutation({
         });
       }
 
-      if (nodeKey === "site_plan" && requirement.status === "review") {
-        const evidence = await ctx.db
-          .query("evidenceLinks")
-          .withIndex("by_requirement", (q) => q.eq("requirementId", requirement._id))
-          .take(2);
-        if (evidence.length >= 2) {
-          await ctx.db.patch("requirements", requirement._id, {
-            status: "verified",
-            verificationStatus: "known",
-          });
-        }
-      }
+      await applyEvidenceStatusForRequirement(ctx, requirement, nodeKey);
     }
 
     await recomputeProjectMetrics(ctx, args.projectId);
@@ -292,22 +546,23 @@ export const applyEvidenceToRequirements = internalMutation({
   },
 });
 
-async function insertRequirements(
+async function upsertRequirements(
   ctx: MutationCtx,
   projectId: Id<"projects">,
   rows: ExtractedRequirement[],
   sourceIds: Map<string, Id<"sources">>,
   sources: Array<{ _id: Id<"sources">; key: string; label: string; url: string }>,
-) {
+  existingByKey: Map<string, { _id: Id<"requirements">; status: ExtractedRequirement["status"] }>,
+): Promise<number> {
+  let inserted = 0;
+
   for (const row of rows) {
     const sourceId = row.sourceKey ? sourceIds.get(row.sourceKey) : undefined;
     const source = sourceId
       ? sources.find((item) => item._id === sourceId)
       : undefined;
 
-    await ctx.db.insert("requirements", {
-      projectId,
-      nodeKey: row.nodeKey,
+    const payload = {
       title: row.title,
       category: row.category,
       status: row.status,
@@ -321,6 +576,25 @@ async function insertRequirements(
       blockedReason: row.blockedReason,
       sortOrder: row.sortOrder,
       isPrimaryBlocker: row.isPrimaryBlocker,
-    });
+    };
+
+    const existing = existingByKey.get(row.nodeKey);
+    if (!existing) {
+      await ctx.db.insert("requirements", {
+        projectId,
+        nodeKey: row.nodeKey,
+        ...payload,
+      });
+      inserted += 1;
+      continue;
+    }
+
+    if (existing.status === "verified") {
+      continue;
+    }
+
+    await ctx.db.patch("requirements", existing._id, payload);
   }
+
+  return inserted;
 }

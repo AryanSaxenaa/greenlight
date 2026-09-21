@@ -16,6 +16,7 @@ export interface ExtractedRequirement {
 const RULE_PATTERNS: Array<{
   pattern: RegExp;
   build: (match: RegExpMatchArray) => ExtractedRequirement;
+  allowedSourceKeys?: string[];
 }> = [
   {
     pattern: /rear setback[^.\n]{0,160}/i,
@@ -32,6 +33,7 @@ const RULE_PATTERNS: Array<{
       isPrimaryBlocker: true,
       sourceKey: "planning_adu",
     }),
+    allowedSourceKeys: ["planning_adu", "ladbs_adu"],
   },
   {
     pattern: /(?:maximum|max)?\s*height[^.\n]{0,80}(\d+\s*(?:feet|ft|'))/i,
@@ -47,6 +49,7 @@ const RULE_PATTERNS: Array<{
       isPrimaryBlocker: false,
       sourceKey: "planning_adu",
     }),
+    allowedSourceKeys: ["planning_adu", "ladbs_adu"],
   },
   {
     pattern: /parking[^.\n]{0,160}/i,
@@ -62,6 +65,7 @@ const RULE_PATTERNS: Array<{
       isPrimaryBlocker: false,
       sourceKey: "planning_adu",
     }),
+    allowedSourceKeys: ["planning_adu", "ladbs_adu"],
   },
   {
     pattern: /site plan|plot plan|scaled plan/i,
@@ -75,8 +79,8 @@ const RULE_PATTERNS: Array<{
       evidenceRequired: "Scaled site plan with existing and proposed structures",
       sortOrder: 6,
       isPrimaryBlocker: false,
-      sourceKey: "ladbs_adu",
     }),
+    allowedSourceKeys: ["planning_adu", "ladbs_adu", "ladbs_property"],
   },
   {
     pattern: /structural|engineering calcs|load[- ]bearing/i,
@@ -90,8 +94,8 @@ const RULE_PATTERNS: Array<{
       evidenceRequired: "Engineering calcs for new or modified load-bearing elements",
       sortOrder: 7,
       isPrimaryBlocker: false,
-      sourceKey: "ladbs_adu",
     }),
+    allowedSourceKeys: ["planning_adu", "ladbs_adu"],
   },
 ];
 
@@ -109,7 +113,10 @@ export function extractRequirementsFromMarkdown(
     }
 
     const requirement = rule.build(match);
-    if (requirement.sourceKey && requirement.sourceKey !== sourceKey) {
+    const allowedKeys = rule.allowedSourceKeys ?? (
+      requirement.sourceKey ? [requirement.sourceKey] : undefined
+    );
+    if (allowedKeys && !allowedKeys.includes(sourceKey)) {
       continue;
     }
 
@@ -119,14 +126,92 @@ export function extractRequirementsFromMarkdown(
     }
     seen.add(dedupeKey);
 
-    extracted.push(requirement);
+    extracted.push({
+      ...requirement,
+      sourceKey: requirement.sourceKey ?? sourceKey,
+    });
   }
 
   return extracted;
 }
 
-export function baseRequirements(): ExtractedRequirement[] {
+export function aduPathwayRequirements(intent: string): ExtractedRequirement[] {
+  const garageConversion = /garage/i.test(intent);
+  const setbackStatus = garageConversion ? "blocked" : "review";
+
   return [
+    {
+      nodeKey: "setback",
+      title: "Rear setback applicability",
+      category: "setback",
+      status: setbackStatus,
+      verificationStatus: "known",
+      authority: "City Planning",
+      blockedReason: garageConversion
+        ? "Garage conversion ADUs must satisfy rear setback rules before plan check."
+        : "Official ADU guidance references rear setback rules for this lot.",
+      sourceExcerpt:
+        "ADU development standards include rear setback limits for detached and converted units.",
+      sortOrder: 3,
+      isPrimaryBlocker: setbackStatus === "blocked",
+      sourceKey: "planning_adu",
+    },
+    {
+      nodeKey: "height",
+      title: "Building height limit",
+      category: "height",
+      status: "review",
+      verificationStatus: "known",
+      authority: "City Planning",
+      sourceExcerpt: "ADU height limits apply to converted garages and detached units.",
+      sortOrder: 4,
+      isPrimaryBlocker: false,
+      sourceKey: "planning_adu",
+    },
+    {
+      nodeKey: "parking",
+      title: "Parking requirement",
+      category: "parking",
+      status: "review",
+      verificationStatus: "known",
+      authority: "City Planning",
+      sourceExcerpt:
+        "Parking is not required for many ADUs within a half-mile of public transit.",
+      sortOrder: 5,
+      isPrimaryBlocker: false,
+      sourceKey: "planning_adu",
+    },
+    {
+      nodeKey: "site_plan",
+      title: "Site plan",
+      category: "site_plan",
+      status: "missing",
+      verificationStatus: "known",
+      authority: "LADBS Plan Check",
+      evidenceRequired: "Scaled site plan with existing garage and proposed ADU layout",
+      sortOrder: 6,
+      isPrimaryBlocker: false,
+      sourceKey: "planning_adu",
+    },
+    {
+      nodeKey: "structural",
+      title: "Structural calculations",
+      category: "structural",
+      status: "missing",
+      verificationStatus: "known",
+      authority: "LADBS",
+      evidenceRequired: garageConversion
+        ? "Engineering calcs for garage conversion and any modified load-bearing elements"
+        : "Engineering calcs for new or modified load-bearing elements",
+      sortOrder: 7,
+      isPrimaryBlocker: false,
+      sourceKey: "ladbs_adu",
+    },
+  ];
+}
+
+export function baseRequirements(intent?: string): ExtractedRequirement[] {
+  const core: ExtractedRequirement[] = [
     {
       nodeKey: "property",
       title: "Property identity",
@@ -176,6 +261,12 @@ export function baseRequirements(): ExtractedRequirement[] {
       sourceKey: "ladbs_adu",
     },
   ];
+
+  if (!intent?.trim()) {
+    return core;
+  }
+
+  return [...core, ...aduPathwayRequirements(intent)];
 }
 
 export function dedupeRequirements(rows: ExtractedRequirement[]): ExtractedRequirement[] {
@@ -192,11 +283,28 @@ export function dedupeRequirements(rows: ExtractedRequirement[]): ExtractedRequi
 
   if (!deduped.some((row) => row.isPrimaryBlocker)) {
     const setback = deduped.find((row) => row.nodeKey === "setback");
-    if (setback) {
+    if (setback && setback.status !== "verified") {
       setback.isPrimaryBlocker = true;
-      setback.status = "blocked";
+      if (setback.status === "review") {
+        setback.status = "blocked";
+      }
     }
   }
 
   return deduped;
+}
+
+export function mergeRequirements(
+  intent: string,
+  aiRequirements: ExtractedRequirement[],
+  regexRequirements: ExtractedRequirement[],
+): ExtractedRequirement[] {
+  const base = baseRequirements(intent);
+  const baseKeys = new Set(base.map((row) => row.nodeKey));
+
+  return dedupeRequirements([
+    ...base,
+    ...aiRequirements,
+    ...regexRequirements.filter((row) => !baseKeys.has(row.nodeKey)),
+  ]);
 }

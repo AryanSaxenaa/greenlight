@@ -139,6 +139,30 @@ export const list = query({
   },
 });
 
+export const repairGraph = mutation({
+  args: { projectId: v.id("projects") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const { project } = await requireProjectAccess(ctx, args.projectId);
+
+    await ctx.runMutation(internal.requirements.ensurePathwayInternal, {
+      projectId: args.projectId,
+      intent: project.intent,
+    });
+    await ctx.runMutation(internal.requirements.relinkDocumentsInternal, {
+      projectId: args.projectId,
+    });
+    await ctx.runMutation(internal.requirements.applyOfficialLookupsInternal, {
+      projectId: args.projectId,
+    });
+    await ctx.runMutation(internal.requirements.seedDependencies, {
+      projectId: args.projectId,
+    });
+
+    return null;
+  },
+});
+
 export const get = query({
   args: { projectId: v.id("projects") },
   returns: v.union(

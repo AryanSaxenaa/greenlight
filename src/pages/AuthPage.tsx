@@ -74,7 +74,7 @@ export function AuthPage() {
   }
 
   return (
-    <AppPageLayout>
+    <AppPageLayout variant="marketing">
       <PageMeta
         title="Sign in"
         description="Create a Greenlight account or sign in to manage your Los Angeles permitting projects."

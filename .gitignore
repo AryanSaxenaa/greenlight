@@ -7,3 +7,6 @@ dist/
 *.log
 .DS_Store
 Thumbs.db
+
+# Hackathon demo video production (local only — do not commit)
+video/

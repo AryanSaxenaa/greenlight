@@ -17,7 +17,7 @@ export function LegalPageLayout({
   children,
 }: LegalPageLayoutProps) {
   return (
-    <AppPageLayout>
+    <AppPageLayout variant="marketing">
       <PageMeta title={title} description={description} path={path} />
       <article className="app-card legal-page">
         <p className="landing-section-kicker">Legal</p>

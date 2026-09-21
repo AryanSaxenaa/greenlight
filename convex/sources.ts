@@ -2,7 +2,7 @@ import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery, query } from "./_generated/server";
 import { v } from "convex/values";
 import { requireProjectAccess } from "./lib/auth";
-import { LA_OFFICIAL_SOURCES } from "./lib/sources";
+import { LA_OFFICIAL_SOURCES, normalizeSourceUrl } from "./lib/sources";
 
 const sourceValidator = v.object({
   _id: v.id("sources"),
@@ -107,6 +107,12 @@ export const seedOfficialSources = internalMutation({
         .unique();
 
       if (existing) {
+        if (existing.url !== source.url) {
+          await ctx.db.patch("sources", existing._id, {
+            url: source.url,
+            healthStatus: "stale",
+          });
+        }
         sourceIds.push(existing._id);
         continue;
       }
@@ -143,6 +149,18 @@ export const addDiscoveredSource = internalMutation({
   },
   returns: v.union(v.id("sources"), v.null()),
   handler: async (ctx, args) => {
+    const normalizedUrl = normalizeSourceUrl(args.url);
+    const existingSources = await ctx.db
+      .query("sources")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    for (const source of existingSources) {
+      if (normalizeSourceUrl(source.url) === normalizedUrl) {
+        return null;
+      }
+    }
+
     const existing = await ctx.db
       .query("sources")
       .withIndex("by_project", (q) =>
@@ -165,13 +183,8 @@ export const addDiscoveredSource = internalMutation({
       healthStatus: "stale",
     });
 
-    const count = await ctx.db
-      .query("sources")
-      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-      .collect();
-
     await ctx.db.patch("projects", args.projectId, {
-      sourcesDiscovered: count.length,
+      sourcesDiscovered: existingSources.length + 1,
       updatedAt: Date.now(),
     });
 

@@ -5,6 +5,7 @@ import { Firecrawl } from "firecrawl";
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import { internalAction } from "../_generated/server";
+import { isGenericPlanningHomepage, normalizeSourceUrl } from "../lib/sources";
 export const scrapeProjectSources = internalAction({
   args: { projectId: v.id("projects") },
   returns: v.null(),
@@ -40,6 +41,13 @@ export const scrapeProjectSources = internalAction({
             if (!url || typeof url !== "string") {
               continue;
             }
+            const normalizedUrl = normalizeSourceUrl(url);
+            if (
+              normalizedUrl.endsWith("planning.lacity.gov") ||
+              normalizedUrl.endsWith("planning.lacity.gov/")
+            ) {
+              continue;
+            }
             const slug = url.split("/").filter(Boolean).pop() ?? "page";
             await ctx.runMutation(internal.sources.addDiscoveredSource, {
               projectId: args.projectId,
@@ -71,6 +79,27 @@ export const scrapeProjectSources = internalAction({
             typeof result.metadata?.title === "string"
               ? result.metadata.title
               : source.label;
+
+          if (
+            source.key === "planning_adu" &&
+            isGenericPlanningHomepage({
+              url: source.url,
+              title,
+              markdownPreview: preview,
+            })
+          ) {
+            await ctx.runMutation(internal.sources.markUnreachable, {
+              sourceId: source._id,
+            });
+            await ctx.runMutation(internal.projects.appendEventInternal, {
+              projectId: args.projectId,
+              type: "source.scrape_failed",
+              message: `${source.label} returned a generic planning homepage instead of ADU guidance.`,
+              actorType: "agent",
+              actorLabel: "Firecrawl",
+            });
+            continue;
+          }
 
           const storageId = markdown
             ? await ctx.storage.store(new Blob([markdown], { type: "text/markdown" }))

@@ -1,13 +1,22 @@
 import { useMutation, useQuery } from "convex/react";
-import { FormEvent, useMemo, useState, type ReactNode } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useLocation, useParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { AppPageLayout } from "../components/AppPageLayout";
+import { ControlRoomCompiler } from "../components/ControlRoomCompiler";
+import { DashDisclosure } from "../components/DashDisclosure";
+import { DashSection } from "../components/DashSection";
+import {
+  ProjectCommandStrip,
+  ProjectWorkspaceTabs,
+} from "../components/ProjectCommandStrip";
+import { ProjectPermitGraph, type PermitGraphNode } from "../components/ProjectPermitGraph";
 import { QueryErrorBoundary } from "../components/QueryErrorBoundary";
 import { authRedirectPath } from "../lib/authRedirect";
+import { eventTone, formatEventMessage } from "../lib/eventMessages";
 import { formatConvexError, isConvexId } from "../lib/errors";
-import { stageLabel, statusClass, statusLabel } from "../lib/status";
+import { stageLabel } from "../lib/status";
 
 export function ProjectPage() {
   const { projectId } = useParams();
@@ -81,6 +90,7 @@ function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
   const proposeChange = useMutation(api.parameters.proposeChange);
   const applyChange = useMutation(api.parameters.applyChange);
   const rejectChange = useMutation(api.parameters.rejectChange);
+  const repairGraph = useMutation(api.projects.repairGraph);
 
   const [uploading, setUploading] = useState(false);
   const [actionPending, setActionPending] = useState(false);
@@ -88,6 +98,27 @@ function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectedSourceId, setSelectedSourceId] = useState<Id<"sources"> | null>(null);
   const [proposedHeight, setProposedHeight] = useState("18");
+  const [workspaceTab, setWorkspaceTab] = useState<
+    "overview" | "evidence" | "sources" | "activity"
+  >("overview");
+
+  useEffect(() => {
+    if (!data || data.project.status !== "active") {
+      return;
+    }
+
+    const hasExtractedDocuments = documents?.some(
+      (document) => (document.extractedFacts?.length ?? 0) > 0,
+    );
+    const needsPathway = data.requirements.length < 9;
+    const needsGraph = graph && graph.nodes.length > 0 && graph.edges.length === 0;
+    const needsEvidenceRelink =
+      Boolean(hasExtractedDocuments) && (evidenceLinks?.length ?? 0) === 0;
+
+    if (needsPathway || needsGraph || needsEvidenceRelink) {
+      void repairGraph({ projectId });
+    }
+  }, [data, documents, evidenceLinks, graph, projectId, repairGraph]);
 
   async function runAction(action: () => Promise<void>) {
     if (actionPending) {
@@ -140,25 +171,30 @@ function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
   const sortedRequirements = [...requirements].sort(
     (a, b) => a.sortOrder - b.sortOrder,
   );
-
   const graphNodes = graph?.nodes ?? [];
-  const childrenByParent = new Map<string, typeof graphNodes>();
-  for (const edge of graph?.edges ?? []) {
-    const children = childrenByParent.get(edge.fromNodeKey) ?? [];
-    children.push(
-      graphNodes.find((node) => node.nodeKey === edge.toNodeKey) ?? {
-        nodeKey: edge.toNodeKey,
-        title: edge.toNodeKey,
-        status: "missing",
-        verificationStatus: "unknown",
-        isPrimaryBlocker: false,
-        sourceLabel: undefined,
-        sourceUrl: undefined,
-        sourceExcerpt: undefined,
-      },
-    );
-    childrenByParent.set(edge.fromNodeKey, children);
-  }
+  const graphLoading = graph === undefined;
+  const displayGraphNodes: PermitGraphNode[] =
+    graphNodes.length > 0
+      ? graphNodes.map((node) => ({
+          nodeKey: node.nodeKey,
+          title: node.title,
+          status: node.status,
+          isPrimaryBlocker: node.isPrimaryBlocker,
+          sourceLabel: node.sourceLabel,
+        }))
+      : sortedRequirements.map((requirement) => ({
+          nodeKey: requirement.nodeKey,
+          title: requirement.title,
+          status: requirement.status,
+          isPrimaryBlocker: requirement.isPrimaryBlocker,
+        }));
+  const eligibleRequirements = sortedRequirements.filter(
+    (requirement) => requirement.status !== "locked",
+  );
+  const verifiedRequirements = eligibleRequirements.filter(
+    (requirement) => requirement.status === "verified",
+  );
+  const compilerComplete = sortedStages.every((stage) => stage.status === "complete");
 
   async function onUpload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -217,418 +253,488 @@ function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
     });
   }
 
-  function renderGraphNode(nodeKey: string, depth = 0): ReactNode {
-    const node = graphNodes.find((item) => item.nodeKey === nodeKey);
-    if (!node) {
-      return null;
-    }
-    const children = childrenByParent.get(nodeKey) ?? [];
-    return (
-      <div key={nodeKey} style={{ marginLeft: depth * 1.25 + "rem" }}>
-        <div className="graph-node">
-          <span>{node.title}</span>
-          <span className={statusClass(node.status)}>{statusLabel(node.status)}</span>
-        </div>
-        {children.map((child) => renderGraphNode(child.nodeKey, depth + 1))}
-      </div>
-    );
-  }
+  const readinessHint =
+    project.readinessPercent === 0 && compilerComplete
+      ? "Compiler finished. Upload evidence to increase readiness."
+      : "Verified requirements unlock permit submission.";
+
+  const pendingApprovalCount = approvals?.length ?? 0;
+  const activityCount =
+    pendingApprovalCount +
+    (communications?.length ?? 0) +
+    (agentRuns?.filter((run) => run.status === "running").length ?? 0);
+
+  const projectDetails = [
+    { label: "Intent", value: project.intent },
+    { label: "Jurisdiction", value: project.jurisdiction ?? "Pending" },
+    { label: "Parcel", value: project.parcelId ?? "unknown" },
+    { label: "Zoning", value: project.zoning ?? "unknown" },
+    ...(project.inboxEmail
+      ? [{ label: "Project inbox", value: project.inboxEmail }]
+      : []),
+  ];
 
   return (
     <AppPageLayout wide>
-      <div className="project-toolbar">
-        <p className="mono muted project-toolbar-meta">
-          {project.address} · {project.status}
-        </p>
-        <div className="cta-row">
-          <Link className="button button-landing-secondary button-sm" to="/projects">
-            All projects
-          </Link>
-          <Link className="button button-landing-secondary button-sm" to="/projects/new">
-            New project
-          </Link>
-        </div>
-      </div>
-
-      {actionError ? <p className="error action-error">{actionError}</p> : null}
-
-      {project.status === "compiling" ? (
-        <div className="compiling-banner" style={{ marginBottom: "1rem" }}>
-          Compiling project. Stages, sources, and events update live as the
-          compiler runs.
-        </div>
-      ) : null}
-
-      <section className="panel project-summary" style={{ marginBottom: "1rem" }}>
-        <div className="header-grid">
-          <div>
-            <p className="landing-section-kicker">Control room</p>
-            <h2 style={{ marginBottom: "0.35rem" }}>{project.title}</h2>
-            <p className="muted" style={{ margin: 0 }}>{project.intent}</p>
-            <p className="mono muted" style={{ marginTop: "0.75rem" }}>
-              {project.jurisdiction ?? "Jurisdiction pending"} · Parcel{" "}
-              {project.parcelId ?? "unknown"} · Zoning {project.zoning ?? "unknown"}
-            </p>
-            {project.inboxEmail ? (
-              <p className="mono muted">Project inbox: {project.inboxEmail}</p>
-            ) : null}
-          </div>
-          <div>
-            <div className="muted mono">Permit readiness</div>
-            <div className="readiness">{project.readinessPercent}%</div>
-          </div>
-        </div>
-        <div className="compiler-stats">
-          <span>Sources discovered: {project.sourcesDiscovered}</span>
-          <span>Sources retrieved: {project.sourcesRetrieved}</span>
-          <span>Rules extracted: {project.rulesExtracted}</span>
-          <span>Blockers: {project.blockerCount}</span>
-        </div>
-      </section>
-
-      <div className="project-layout">
-        <aside className="panel stack">
-          <h3>Permit graph</h3>
-          {graphNodes.length ? (
-            renderGraphNode("property")
-          ) : (
-            <p className="muted">Dependency graph pending compilation.</p>
-          )}
-        </aside>
-
-        <section className="stack">
-          <div className="panel">
-            <h3>Compiler</h3>
-            {sortedStages.map((stage) => (
-              <div className="stage-row" key={stage._id}>
-                <span className="mono">
-                  {String(stage.order).padStart(2, "0")} {stage.label}
-                </span>
-                <span className="muted mono">{stageLabel(stage.status)}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="panel">
-            <h3>Change impact</h3>
-            <p className="muted">
-              Propose a project parameter change and review impact before applying.
-            </p>
-            <div className="cta-row">
-              <input
-                value={proposedHeight}
-                onChange={(event) => setProposedHeight(event.target.value)}
-                placeholder="Proposed ADU height (ft)"
-              />
+      <div className="dash-project project-workspace">
+        <ProjectCommandStrip
+          title={project.title}
+          address={project.address}
+          readinessPercent={project.readinessPercent}
+          readinessHint={readinessHint}
+          verifiedCount={verifiedRequirements.length}
+          eligibleCount={eligibleRequirements.length}
+          nextAction={project.nextAction}
+          compiling={project.status === "compiling"}
+          pendingApprovals={pendingApprovalCount}
+          onShowActivity={() => setWorkspaceTab("activity")}
+          metrics={[
+            { value: project.sourcesDiscovered, label: "sources" },
+            { value: project.sourcesRetrieved, label: "retrieved" },
+            { value: project.rulesExtracted, label: "rules" },
+            { value: project.blockerCount, label: "blockers" },
+          ]}
+          details={projectDetails}
+          actions={
+            <div className="cta-row project-command-links">
+              <Link className="button dash-button-secondary" to="/projects">
+                All projects
+              </Link>
               <button
-                className="button button-landing-secondary"
+                className="button dash-button-primary"
                 type="button"
-                onClick={() => void onProposeHeightChange()}
+                onClick={() => setWorkspaceTab("evidence")}
               >
-                Propose height change
+                Upload evidence
               </button>
             </div>
-            {pendingChanges?.map((change) => (
-              <div className="impact-card" key={change._id}>
-                <div className="mono">
-                  {change.parameterKey}: {change.previousValue} → {change.proposedValue}
-                </div>
+          }
+        />
+
+        {actionError ? <p className="error action-error">{actionError}</p> : null}
+
+        <ProjectWorkspaceTabs
+          active={workspaceTab}
+          onChange={(tab) => setWorkspaceTab(tab as typeof workspaceTab)}
+          tabs={[
+            { id: "overview", label: "Overview" },
+            {
+              id: "evidence",
+              label: "Evidence",
+              badge: (documents?.length ?? 0) + (pendingChanges?.length ?? 0),
+            },
+            { id: "sources", label: "Sources", badge: sources?.sources.length ?? 0 },
+            { id: "activity", label: "Activity", badge: activityCount },
+          ]}
+        />
+
+        <div className="project-workspace-panel" role="tabpanel">
+          {workspaceTab === "overview" ? (
+            <div className="project-overview-grid">
+              <ProjectPermitGraph
+                variant="light"
+                compact
+                nodes={displayGraphNodes}
+                loading={graphLoading}
+                readinessPercent={project.readinessPercent}
+              />
+
+              <div className="project-overview-side">
+                <ControlRoomCompiler
+                  compact
+                  stages={sortedStages}
+                  stageLabel={stageLabel}
+                />
+
+                <DashDisclosure
+                  title="Project parameters"
+                  meta={`${parameters?.length ?? 0} tracked`}
+                >
+                  <div className="parameter-list">
+                    {parameters?.map((parameter) => (
+                      <div className="parameter-row" key={parameter._id}>
+                        <div className="mono parameter-key">
+                          {parameter.key}: {parameter.value}
+                          {parameter.unit ? ` ${parameter.unit}` : ""}
+                        </div>
+                        <span
+                          className={`parameter-badge parameter-badge-${parameter.verificationStatus}`}
+                        >
+                          {parameter.verificationStatus}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </DashDisclosure>
+              </div>
+            </div>
+          ) : null}
+
+          {workspaceTab === "evidence" ? (
+            <div className="project-stack">
+              <DashSection variant="module" kicker="Evidence" title="Upload documents">
+                <form className="evidence-upload-form" onSubmit={onUpload}>
+                  <div className="evidence-upload-row">
+                    <label className="evidence-upload-field">
+                      <span className="evidence-upload-label">Document type</span>
+                      <select name="documentType" defaultValue="site_plan">
+                        <option value="site_plan">Site plan</option>
+                        <option value="survey">Survey</option>
+                        <option value="structural">Structural calculations</option>
+                        <option value="existing_plans">Existing plans</option>
+                        <option value="title_report">Title report</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </label>
+                    <label className="evidence-upload-field evidence-upload-field-file">
+                      <span className="evidence-upload-label">File</span>
+                      <input name="file" type="file" required />
+                    </label>
+                    <div className="evidence-upload-action">
+                      <button
+                        className="button dash-button-primary evidence-upload-button"
+                        type="submit"
+                        disabled={uploading}
+                      >
+                        {uploading ? "Uploading..." : "Upload evidence"}
+                      </button>
+                    </div>
+                  </div>
+                  {uploadError ? <p className="error">{uploadError}</p> : null}
+                </form>
+              </DashSection>
+
+              <DashDisclosure
+                title="Uploaded documents"
+                meta={`${documents?.length ?? 0} files`}
+                defaultOpen={(documents?.length ?? 0) > 0}
+              >
+                {documents?.length ? (
+                  documents.map((document) => (
+                    <div className="event-row" key={document._id}>
+                      <div>
+                        <div>{document.filename}</div>
+                        <div className="muted mono">{document.documentType}</div>
+                        {document.extractedFacts?.length ? (
+                          <ul className="muted" style={{ marginBottom: 0 }}>
+                            {document.extractedFacts.map((fact) => (
+                              <li key={`${fact.label}-${fact.value}`}>
+                                {fact.label}: {fact.value}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="muted" style={{ marginBottom: 0 }}>
+                            Fact extraction pending
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="muted">No documents uploaded yet.</p>
+                )}
+              </DashDisclosure>
+
+              <DashDisclosure
+                title="Evidence links"
+                meta={`${evidenceLinks?.length ?? 0} mapped`}
+                defaultOpen={(evidenceLinks?.length ?? 0) > 0}
+              >
+                {evidenceLinks?.length ? (
+                  evidenceLinks.map((link) => {
+                    const requirement = sortedRequirements.find(
+                      (item) => item._id === link.requirementId,
+                    );
+                    const document = documents?.find((item) => item._id === link.documentId);
+                    return (
+                      <div className="event-row" key={link._id}>
+                        <div>
+                          <div>{requirement?.title ?? "Requirement"}</div>
+                          <div className="muted">
+                            {document?.filename ?? "Document"} · {link.fact}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="muted">Upload documents to map evidence to requirements.</p>
+                )}
+              </DashDisclosure>
+
+              <DashDisclosure
+                title="Parameter changes"
+                meta={`${pendingChanges?.length ?? 0} pending`}
+                defaultOpen={(pendingChanges?.length ?? 0) > 0}
+              >
                 <p className="muted">
-                  Requirements changed: {change.requirementsChanged} · Invalidated:{" "}
-                  {change.requirementsInvalidated} · Documents affected:{" "}
-                  {change.documentsAffected}
+                  Propose a project parameter change and review impact before applying.
                 </p>
-                {change.blockerCreated ? (
-                  <p className="error">{change.blockerCreated}</p>
-                ) : null}
                 <div className="cta-row">
-                  <button
-                    className="button button-landing-primary"
-                    type="button"
-                    disabled={actionPending}
-                    onClick={() =>
-                      void runAction(async () => {
-                        await applyChange({ changeSetId: change._id });
-                      })
-                    }
-                  >
-                    Apply change
-                  </button>
+                  <input
+                    value={proposedHeight}
+                    onChange={(event) => setProposedHeight(event.target.value)}
+                    placeholder="Proposed ADU height (ft)"
+                  />
                   <button
                     className="button button-landing-secondary"
                     type="button"
-                    disabled={actionPending}
-                    onClick={() =>
-                      void runAction(async () => {
-                        await rejectChange({ changeSetId: change._id });
-                      })
-                    }
+                    onClick={() => void onProposeHeightChange()}
                   >
-                    Reject
+                    Propose height change
                   </button>
                 </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="panel">
-            <h3>Official sources</h3>
-            {sources?.sources.map((source) => {
-              const snapshot = sources.snapshots.find(
-                (item) => item.sourceId === source._id,
-              );
-              return (
-                <button
-                  className="source-row"
-                  key={source._id}
-                  type="button"
-                  onClick={() => setSelectedSourceId(source._id)}
-                >
-                  <div>
-                    <div>{source.label}</div>
-                    <div className="mono muted">
-                      {source.authority} · {source.healthStatus ?? "unknown"}
-                      {source.monitorId ? " · monitored" : ""}
+                {pendingChanges?.map((change) => (
+                  <div className="dash-module-item impact-card" key={change._id}>
+                    <div className="mono">
+                      {change.parameterKey}: {change.previousValue} → {change.proposedValue}
                     </div>
-                    {snapshot ? (
-                      <p className="muted" style={{ marginBottom: 0 }}>
-                        {snapshot.title ?? "Snapshot retrieved"} · hash{" "}
-                        {snapshot.contentHash.slice(0, 10)}
-                      </p>
-                    ) : (
-                      <p className="muted" style={{ marginBottom: 0 }}>
-                        Snapshot pending
-                      </p>
-                    )}
+                    <p className="muted">
+                      Requirements changed: {change.requirementsChanged} · Invalidated:{" "}
+                      {change.requirementsInvalidated} · Documents affected:{" "}
+                      {change.documentsAffected}
+                    </p>
+                    {change.blockerCreated ? (
+                      <p className="error">{change.blockerCreated}</p>
+                    ) : null}
+                    <div className="cta-row">
+                      <button
+                        className="button button-landing-primary"
+                        type="button"
+                        disabled={actionPending}
+                        onClick={() =>
+                          void runAction(async () => {
+                            await applyChange({ changeSetId: change._id });
+                          })
+                        }
+                      >
+                        Apply change
+                      </button>
+                      <button
+                        className="button button-landing-secondary"
+                        type="button"
+                        disabled={actionPending}
+                        onClick={() =>
+                          void runAction(async () => {
+                            await rejectChange({ changeSetId: change._id });
+                          })
+                        }
+                      >
+                        Reject
+                      </button>
+                    </div>
                   </div>
-                </button>
-              );
-            })}
-          </div>
+                ))}
+              </DashDisclosure>
+            </div>
+          ) : null}
 
-          {selectedSourceId && selectedSnapshot ? (
-            <div className="panel source-drawer">
-              <h3>Source provenance</h3>
-              <p className="mono muted">
-                {sources?.sources.find((item) => item._id === selectedSourceId)?.label}
-              </p>
-              <p className="muted">{selectedSnapshot.markdownPreview.slice(0, 500)}...</p>
-              {snapshotUrl ? (
-                <a className="button button-landing-secondary" href={snapshotUrl} target="_blank" rel="noreferrer">
-                  View captured version
-                </a>
+          {workspaceTab === "sources" ? (
+            <div className="project-stack">
+              <DashSection kicker="Official sources" title="Agency research">
+                <div className="source-list">
+                  {sources?.sources.map((source) => {
+                    const snapshot = sources.snapshots.find(
+                      (item) => item.sourceId === source._id,
+                    );
+                    return (
+                      <button
+                        className={`source-row source-row-${source.healthStatus ?? "unknown"}`}
+                        key={source._id}
+                        type="button"
+                        onClick={() => setSelectedSourceId(source._id)}
+                      >
+                        <div>
+                          <div className="source-row-title">{source.label}</div>
+                          <div className="mono source-row-meta">
+                            {source.authority} · {source.healthStatus ?? "unknown"}
+                            {source.monitorId ? " · monitored" : ""}
+                          </div>
+                          {snapshot ? (
+                            <p className="muted" style={{ marginBottom: 0 }}>
+                              {snapshot.title ?? "Snapshot retrieved"} · hash{" "}
+                              {snapshot.contentHash.slice(0, 10)}
+                            </p>
+                          ) : (
+                            <p className="muted" style={{ marginBottom: 0 }}>
+                              Snapshot pending
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </DashSection>
+
+              {selectedSourceId && selectedSnapshot ? (
+                <DashSection variant="module" className="source-drawer" title="Source provenance">
+                  <p className="mono muted">
+                    {sources?.sources.find((item) => item._id === selectedSourceId)?.label}
+                  </p>
+                  <p className="muted">{selectedSnapshot.markdownPreview.slice(0, 500)}...</p>
+                  {snapshotUrl ? (
+                    <a
+                      className="button button-landing-secondary"
+                      href={snapshotUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      View captured version
+                    </a>
+                  ) : null}
+                </DashSection>
               ) : null}
             </div>
           ) : null}
 
-          <div className="panel">
-            <h3>Documents</h3>
-            <form className="form-grid" onSubmit={onUpload}>
-              <label>
-                Document type
-                <select name="documentType" defaultValue="site_plan">
-                  <option value="site_plan">Site plan</option>
-                  <option value="survey">Survey</option>
-                  <option value="structural">Structural calculations</option>
-                  <option value="existing_plans">Existing plans</option>
-                  <option value="title_report">Title report</option>
-                  <option value="other">Other</option>
-                </select>
-              </label>
-              <label>
-                File
-                <input name="file" type="file" required />
-              </label>
-              {uploadError ? <p className="error">{uploadError}</p> : null}
-              <button
-                className="button button-landing-primary"
-                type="submit"
-                disabled={uploading}
+          {workspaceTab === "activity" ? (
+            <div className="project-activity-grid">
+              <DashDisclosure
+                title="Pending approvals"
+                meta={`${pendingApprovalCount} waiting`}
+                defaultOpen={pendingApprovalCount > 0}
               >
-                {uploading ? "Uploading..." : "Upload evidence"}
-              </button>
-            </form>
-            {documents?.map((document) => (
-              <div className="event-row" key={document._id}>
-                <div>
-                  <div>{document.filename}</div>
-                  <div className="muted mono">{document.documentType}</div>
-                  {document.extractedFacts?.length ? (
-                    <ul className="muted" style={{ marginBottom: 0 }}>
-                      {document.extractedFacts.map((fact) => (
-                        <li key={`${fact.label}-${fact.value}`}>
-                          {fact.label}: {fact.value}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="muted" style={{ marginBottom: 0 }}>
-                      Fact extraction pending
-                    </p>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="panel">
-            <h3>Evidence mapping</h3>
-            {evidenceLinks?.length ? (
-              evidenceLinks.map((link) => {
-                const requirement = sortedRequirements.find(
-                  (item) => item._id === link.requirementId,
-                );
-                const document = documents?.find(
-                  (item) => item._id === link.documentId,
-                );
-                return (
-                  <div className="event-row" key={link._id}>
-                    <div>
-                      <div>{requirement?.title ?? "Requirement"}</div>
-                      <div className="muted">
-                        {document?.filename ?? "Document"} · {link.fact}
+                {approvals?.length ? (
+                  approvals.map((approval) => (
+                    <div className="dash-module-item inner-panel" key={approval._id}>
+                      <div className="mono">{approval.subject}</div>
+                      {approval.factsUsed?.length ? (
+                        <div>
+                          <div className="muted mono">Facts used externally</div>
+                          <ul className="muted">
+                            {approval.factsUsed.map((fact) => (
+                              <li key={fact}>{fact}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                      <pre className="draft-body">{approval.body}</pre>
+                      <div className="cta-row">
+                        <button
+                          className="button button-landing-primary"
+                          type="button"
+                          disabled={actionPending}
+                          onClick={() =>
+                            void runAction(async () => {
+                              await approveDraft({ approvalId: approval._id });
+                            })
+                          }
+                        >
+                          Approve & send
+                        </button>
+                        <button
+                          className="button button-landing-secondary"
+                          type="button"
+                          disabled={actionPending}
+                          onClick={() =>
+                            void runAction(async () => {
+                              await rejectDraft({ approvalId: approval._id });
+                            })
+                          }
+                        >
+                          Reject
+                        </button>
                       </div>
                     </div>
-                  </div>
-                );
-              })
-            ) : (
-              <p className="muted">Upload documents to map evidence to requirements.</p>
-            )}
-          </div>
-        </section>
+                  ))
+                ) : (
+                  <p className="muted">No pending approvals.</p>
+                )}
+              </DashDisclosure>
 
-        <aside className="panel stack">
-          <h3>Next action</h3>
-          <p>{project.nextAction ?? "Waiting for compiler output."}</p>
-
-          <h3>Project parameters</h3>
-          {parameters?.map((parameter) => (
-            <div className="event-row" key={parameter._id}>
-              <div className="mono">
-                {parameter.key}: {parameter.value}
-                {parameter.unit ? ` ${parameter.unit}` : ""}
-              </div>
-              <div className="muted">{parameter.verificationStatus}</div>
-            </div>
-          ))}
-
-          <h3>Pending approvals</h3>
-          {approvals?.length ? (
-            approvals.map((approval) => (
-              <div className="panel inner-panel" key={approval._id}>
-                <div className="mono">{approval.subject}</div>
-                {approval.factsUsed?.length ? (
-                  <div>
-                    <div className="muted mono">Facts used externally</div>
-                    <ul className="muted">
-                      {approval.factsUsed.map((fact) => (
-                        <li key={fact}>{fact}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-                <pre className="draft-body">{approval.body}</pre>
-                <div className="cta-row">
-                  <button
-                    className="button button-landing-primary"
-                    type="button"
-                    disabled={actionPending}
-                    onClick={() =>
-                      void runAction(async () => {
-                        await approveDraft({ approvalId: approval._id });
-                      })
-                    }
-                  >
-                    Approve & send
-                  </button>
-                  <button
-                    className="button button-landing-secondary"
-                    type="button"
-                    disabled={actionPending}
-                    onClick={() =>
-                      void runAction(async () => {
-                        await rejectDraft({ approvalId: approval._id });
-                      })
-                    }
-                  >
-                    Reject
-                  </button>
-                </div>
-              </div>
-            ))
-          ) : (
-            <p className="muted">No pending approvals.</p>
-          )}
-
-          <h3>Inbox</h3>
-          {communications?.length ? (
-            communications.map((message) => (
-              <div className="event-row" key={message._id}>
-                <div>
-                  <div className="mono">
-                    {message.direction} · {message.status} ·{" "}
-                    {message.deliveryStatus ?? "pending"}
-                  </div>
-                  <div>{message.subject}</div>
-                  {message.classification ? (
-                    <div className="muted mono">Classification: {message.classification}</div>
-                  ) : null}
-                  {message.detectedDecision ? (
-                    <div className="muted">Decision: {message.detectedDecision}</div>
-                  ) : null}
-                  {message.projectImpact ? (
-                    <div className="muted">Impact: {message.projectImpact}</div>
-                  ) : null}
-                  {message.linkedRequirementId ? (
-                    <div className="mono muted">
-                      Linked:{" "}
-                      {sortedRequirements.find(
-                        (item) => item._id === message.linkedRequirementId,
-                      )?.title ?? message.linkedRequirementId}
+              <DashDisclosure
+                title="Agency mail"
+                meta={`${communications?.length ?? 0} messages`}
+                defaultOpen={(communications?.length ?? 0) > 0}
+              >
+                {communications?.length ? (
+                  communications.map((message) => (
+                    <div className="event-row" key={message._id}>
+                      <div>
+                        <div className="mono">
+                          {message.direction} · {message.status} ·{" "}
+                          {message.deliveryStatus ?? "pending"}
+                        </div>
+                        <div>{message.subject}</div>
+                        {message.classification ? (
+                          <div className="muted mono">
+                            Classification: {message.classification}
+                          </div>
+                        ) : null}
+                        {message.detectedDecision ? (
+                          <div className="muted">Decision: {message.detectedDecision}</div>
+                        ) : null}
+                        {message.projectImpact ? (
+                          <div className="muted">Impact: {message.projectImpact}</div>
+                        ) : null}
+                        {message.linkedRequirementId ? (
+                          <div className="mono muted">
+                            Linked:{" "}
+                            {sortedRequirements.find(
+                              (item) => item._id === message.linkedRequirementId,
+                            )?.title ?? message.linkedRequirementId}
+                          </div>
+                        ) : null}
+                        <div className="muted">{message.body.slice(0, 180)}</div>
+                      </div>
                     </div>
-                  ) : null}
-                  <div className="muted">{message.body.slice(0, 180)}</div>
-                </div>
-              </div>
-            ))
-          ) : (
-            <p className="muted">No correspondence yet.</p>
-          )}
+                  ))
+                ) : (
+                  <p className="muted">No correspondence yet.</p>
+                )}
+              </DashDisclosure>
 
-          {extractions?.length ? (
-            <>
-              <h3>Email extractions</h3>
-              {extractions.map((extraction) => (
-                <div className="event-row" key={extraction._id}>
-                  <div className="mono">{extraction.extractionType}</div>
-                  <div className="muted">{extraction.value}</div>
+              {extractions?.length ? (
+                <DashDisclosure title="Email extractions" meta={`${extractions.length} parsed`}>
+                  {extractions.map((extraction) => (
+                    <div className="event-row" key={extraction._id}>
+                      <div className="mono">{extraction.extractionType}</div>
+                      <div className="muted">{extraction.value}</div>
+                    </div>
+                  ))}
+                </DashDisclosure>
+              ) : null}
+
+              <DashDisclosure title="Background runs" meta={`${agentRuns?.length ?? 0} runs`}>
+                {agentRuns?.length ? (
+                  agentRuns.map((run) => (
+                    <div className="event-row" key={run._id}>
+                      <div className="mono">
+                        {run.actionType} · {run.status}
+                      </div>
+                      <div className="muted">{run.message}</div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="muted">No agent runs yet.</p>
+                )}
+              </DashDisclosure>
+
+              <DashDisclosure
+                title="Event stream"
+                meta={`${events.length} events`}
+                defaultOpen={events.length <= 8}
+              >
+                <div className="event-stream">
+                  {events.map((event) => (
+                    <div
+                      className={`event-card event-card-${eventTone(event.type)}`}
+                      key={event._id}
+                    >
+                      <div className="event-card-type mono">
+                        {event.type} · {event.actorType}
+                        {event.actorLabel ? ` · ${event.actorLabel}` : ""}
+                      </div>
+                      <div className="event-card-message">{formatEventMessage(event)}</div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </>
+              </DashDisclosure>
+            </div>
           ) : null}
-
-          <h3>Agent runs</h3>
-          {agentRuns?.map((run) => (
-            <div className="event-row" key={run._id}>
-              <div className="mono">{run.actionType} · {run.status}</div>
-              <div className="muted">{run.message}</div>
-            </div>
-          ))}
-
-          <h3>Event stream</h3>
-          {events.map((event) => (
-            <div className="event-row" key={event._id}>
-              <div>
-                <div className="mono">
-                  {event.type} · {event.actorType}
-                  {event.actorLabel ? ` · ${event.actorLabel}` : ""}
-                </div>
-                <div className="muted">{event.message}</div>
-              </div>
-            </div>
-          ))}
-        </aside>
+        </div>
       </div>
     </AppPageLayout>
   );
