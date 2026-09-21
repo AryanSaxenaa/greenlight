@@ -4095,9 +4095,250 @@ input[type="file"]::file-selector-button:hover {
   align-items: start;
 }
 
+.project-overview-main {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.dash-graph-flow {
+  position: relative;
+  height: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+.dash-graph-flow-line {
+  position: absolute;
+  inset: 0.75rem 0 auto;
+  width: 100%;
+  height: 1.5rem;
+}
+
+.dash-graph-flow-node {
+  position: absolute;
+  top: 0.55rem;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  border: 2px solid rgba(31, 107, 82, 0.35);
+  background: var(--dash-bg);
+}
+
+.dash-graph-flow-verified {
+  background: var(--dash-accent);
+}
+
+.dash-graph-flow-blocked {
+  background: #c45c5c;
+}
+
+.dash-graph-flow-review {
+  background: #d4a574;
+}
+
+.dash-graph-flow-missing {
+  background: #9aa3ad;
+}
+
+.dash-graph-flow-locked {
+  background: #cbd5e1;
+}
+
+.dash-graph-blocker-reason,
+.dash-graph-blocker-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.dash-network {
+  padding-top: 0.25rem;
+}
+
+.dash-network-head {
+  margin-bottom: 0.75rem;
+}
+
+.dash-network-kicker {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dash-muted);
+}
+
+.dash-network-meta {
+  margin: 0.2rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--dash-muted);
+}
+
+.dash-network-canvas-wrap {
+  position: relative;
+  min-height: 220px;
+  border-top: 1px solid var(--dash-border);
+  border-bottom: 1px solid var(--dash-border);
+}
+
+.dash-network-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.dash-network-line {
+  stroke: rgba(31, 107, 82, 0.35);
+  stroke-width: 0.35;
+}
+
+.dash-network-nodes {
+  position: absolute;
+  inset: 0;
+}
+
+.dash-network-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-width: 5.5rem;
+  max-width: 7rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: 0.65rem;
+  border: 1px solid var(--dash-border);
+  background: rgba(255, 255, 255, 0.92);
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(31, 107, 82, 0.06);
+}
+
+.dash-network-node-primary {
+  border-color: rgba(196, 92, 92, 0.45);
+  box-shadow: 0 0 0 1px rgba(196, 92, 92, 0.12);
+}
+
+.dash-network-node-label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.dash-network-node-status {
+  display: block;
+  margin-top: 0.2rem;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dash-network-node-verified {
+  border-color: rgba(31, 107, 82, 0.45);
+}
+
+.dash-network-node-blocked {
+  border-color: rgba(196, 92, 92, 0.45);
+}
+
+.dash-network-node-review {
+  border-color: rgba(212, 165, 116, 0.55);
+}
+
+.dash-network-node-missing {
+  border-color: rgba(154, 163, 173, 0.55);
+}
+
+.dash-network-node-locked {
+  opacity: 0.72;
+}
+
+.dash-network-loading,
+.dash-network-empty {
+  padding: 1rem 0;
+  color: var(--dash-muted);
+}
+
+.evidence-impact {
+  padding-bottom: 0.5rem;
+}
+
+.evidence-impact-header h3 {
+  margin: 0.15rem 0 0;
+  font-size: 1.05rem;
+}
+
+.evidence-impact-card {
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--dash-border);
+}
+
+.evidence-impact-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  align-items: baseline;
+}
+
+.evidence-impact-list {
+  margin: 0.65rem 0 0;
+  padding-left: 1rem;
+  color: var(--dash-text);
+}
+
+.evidence-impact-list li + li {
+  margin-top: 0.35rem;
+}
+
+.evidence-impact-callouts {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+}
+
+.evidence-impact-callout {
+  padding: 0.85rem 0.95rem;
+  border-radius: 0.75rem;
+  background: var(--dash-accent-soft);
+}
+
+.evidence-impact-callout-blocked {
+  background: rgba(196, 92, 92, 0.08);
+  border: 1px solid rgba(196, 92, 92, 0.18);
+}
+
+.evidence-impact-callout p {
+  margin: 0.35rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.agentmail-status {
+  padding: 0.25rem 0 0.5rem;
+}
+
+.agentmail-status p {
+  margin: 0.45rem 0 0;
+  line-height: 1.5;
+}
+
+.evidence-demo-actions {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .project-overview-side {
   display: grid;
   gap: 0.75rem;
+}
+
+.project-overview-side .dash-network-canvas-wrap {
+  min-height: 300px;
+}
+
+.project-overview-side .dash-network-node {
+  min-width: 4.75rem;
+  max-width: 6.25rem;
+  padding: 0.35rem 0.4rem;
 }
 
 .project-stack,

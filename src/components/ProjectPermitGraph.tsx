@@ -8,6 +8,7 @@ export type PermitGraphNode = {
   status: RequirementStatus;
   isPrimaryBlocker: boolean;
   sourceLabel?: string;
+  blockedReason?: string;
 };
 
 type ProjectPermitGraphProps = {
@@ -41,7 +42,7 @@ export function ProjectPermitGraph({
   variant = "light",
   compact = false,
 }: ProjectPermitGraphProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const sorted = [...nodes].sort((left, right) => {
     const order = [
       "property",
@@ -133,23 +134,47 @@ export function ProjectPermitGraph({
         <div className={scoreClass}>{readinessPercent}% ready</div>
       </header>
 
-      {variant === "royal" ? (
-        <div className="cr-graph-glass-flow" aria-hidden="true">
+      {variant === "royal" || variant === "light" ? (
+        <div
+          className={
+            variant === "light" ? "dash-graph-flow" : "cr-graph-glass-flow"
+          }
+          aria-hidden="true"
+        >
           {sorted.map((node, index) => (
             <span
               key={`dot-${node.nodeKey}`}
-              className={`cr-graph-flow-node cr-graph-flow-${node.status}`}
+              className={`${
+                variant === "light" ? "dash-graph-flow-node" : "cr-graph-flow-node"
+              } ${variant === "light" ? `dash-graph-flow-${node.status}` : `cr-graph-flow-${node.status}`}`}
               style={{ left: `${8 + index * (84 / Math.max(sorted.length - 1, 1))}%` }}
             />
           ))}
-          <svg className="cr-graph-flow-line" viewBox="0 0 400 24" preserveAspectRatio="none">
-            <path d="M8 12 C120 4, 280 20, 392 12" fill="none" stroke="url(#crGoldLine)" strokeWidth="2" />
+          <svg
+            className={variant === "light" ? "dash-graph-flow-line" : "cr-graph-flow-line"}
+            viewBox="0 0 400 24"
+            preserveAspectRatio="none"
+          >
+            <path
+              d="M8 12 C120 4, 280 20, 392 12"
+              fill="none"
+              stroke={variant === "light" ? "url(#dashGreenLine)" : "url(#crGoldLine)"}
+              strokeWidth="2"
+            />
             <defs>
-              <linearGradient id="crGoldLine" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="rgba(201,169,98,0.2)" />
-                <stop offset="50%" stopColor="rgba(201,169,98,0.85)" />
-                <stop offset="100%" stopColor="rgba(31,107,82,0.6)" />
-              </linearGradient>
+              {variant === "light" ? (
+                <linearGradient id="dashGreenLine" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="rgba(31, 107, 82, 0.15)" />
+                  <stop offset="50%" stopColor="rgba(31, 107, 82, 0.75)" />
+                  <stop offset="100%" stopColor="rgba(31, 107, 82, 0.35)" />
+                </linearGradient>
+              ) : (
+                <linearGradient id="crGoldLine" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="rgba(201,169,98,0.2)" />
+                  <stop offset="50%" stopColor="rgba(201,169,98,0.85)" />
+                  <stop offset="100%" stopColor="rgba(31,107,82,0.6)" />
+                </linearGradient>
+              )}
             </defs>
           </svg>
         </div>
@@ -194,6 +219,15 @@ export function ProjectPermitGraph({
         <div className={alertClass}>
           <span className={alertLabelClass}>Primary focus</span>
           <strong>{blocker.title}</strong>
+          {blocker.blockedReason ? (
+            <p className="dash-graph-blocker-reason">{blocker.blockedReason}</p>
+          ) : null}
+          {blocker.status === "blocked" ? (
+            <p className="dash-graph-blocker-hint muted">
+              Upload a revised site plan showing rear setback, or approve an agency clarification
+              draft in Activity to clear this step.
+            </p>
+          ) : null}
         </div>
       ) : (
         <div className={calmAlertClass}>

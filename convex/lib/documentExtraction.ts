@@ -10,11 +10,47 @@ const FACT_PATTERNS: Array<{
   confidence: number;
 }> = [
   { label: "Lot area", pattern: /lot(?:\s+area)?[:\s]+([0-9,]+(?:\.\d+)?\s*(?:sq\.?\s*ft|sf))/i, confidence: 0.85 },
-  { label: "Rear setback", pattern: /rear setback[:\s]+([0-9]+(?:\.\d+)?\s*(?:ft|feet|'))/i, confidence: 0.9 },
-  { label: "Building height", pattern: /(?:proposed\s+)?height[:\s]+([0-9]+(?:\.\d+)?\s*(?:ft|feet|'))/i, confidence: 0.9 },
-  { label: "Existing structure", pattern: /existing (?:structure|building|garage)[:\s]+([^\n.;]{3,100})/i, confidence: 0.75 },
-  { label: "Proposed ADU", pattern: /proposed (?:adu|dwelling|unit)[:\s]+([^\n.;]{3,100})/i, confidence: 0.8 },
-  { label: "Zoning", pattern: /zoning[:\s]+([A-Z0-9-]{2,12})/i, confidence: 0.8 },
+  {
+    label: "Rear setback",
+    pattern: /rear setback[:\s]+([0-9]+(?:\.\d+)?(?:\s*(?:ft|feet|'))?)/i,
+    confidence: 0.92,
+  },
+  {
+    label: "Rear setback",
+    pattern: /([0-9]+(?:'\-0"?|\s*ft))\s*rear(?:\s+setback)?/i,
+    confidence: 0.88,
+  },
+  {
+    label: "Building height",
+    pattern: /proposed(?:\s+adu)?\s+height[:\s]+([0-9]+(?:\.\d+)?\s*(?:ft|feet|'))/i,
+    confidence: 0.9,
+  },
+  {
+    label: "Building height",
+    pattern: /(?:maximum|max)?\s*height[:\s]+([0-9]+(?:\.\d+)?\s*(?:ft|feet|'))/i,
+    confidence: 0.85,
+  },
+  {
+    label: "Existing structure",
+    pattern: /existing (?:structure|building|garage)[:\s]+([^\n.;]{3,120})/i,
+    confidence: 0.75,
+  },
+  {
+    label: "Proposed ADU",
+    pattern: /proposed (?:adu|dwelling|unit)[:\s]+([^\n.;]{3,120})/i,
+    confidence: 0.8,
+  },
+  { label: "Zoning", pattern: /zoning[:\s]+([A-Z0-9.-]{2,12})/i, confidence: 0.85 },
+  {
+    label: "Structural scope",
+    pattern: /(?:engineering calcs|structural calculations)[^\n.]{0,80}([^\n.]{8,120})/i,
+    confidence: 0.82,
+  },
+  {
+    label: "Load-bearing wall",
+    pattern: /load[- ]bearing[^.\n]{0,80}([^\n.]{8,100})/i,
+    confidence: 0.8,
+  },
 ];
 
 export function extractFactsFromText(
@@ -27,16 +63,31 @@ export function extractFactsFromText(
     { label: "Document type", value: documentType, confidence: 1 },
     { label: "Filename", value: filename, confidence: 1 },
   ];
+  const seen = new Set<string>();
 
   for (const rule of FACT_PATTERNS) {
     const match = combined.match(rule.pattern);
-    if (match?.[1]) {
-      facts.push({
-        label: rule.label,
-        value: match[1].trim(),
-        confidence: rule.confidence,
-      });
+    if (!match?.[1]) {
+      continue;
     }
+    const dedupeKey = rule.label;
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+    seen.add(dedupeKey);
+    facts.push({
+      label: rule.label,
+      value: match[1].trim(),
+      confidence: rule.confidence,
+    });
+  }
+
+  if (documentType === "structural" && !seen.has("Structural scope")) {
+    facts.push({
+      label: "Structural scope",
+      value: "Engineering calculations complete for plan check review.",
+      confidence: 0.7,
+    });
   }
 
   if (facts.length === 2 && documentType === "site_plan") {

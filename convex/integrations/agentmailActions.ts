@@ -7,6 +7,86 @@ import { internalAction } from "../_generated/server";
 interface AgentMailInbox {
   inbox_id: string;
   email: string;
+  client_id?: string;
+  metadata?: Record<string, string>;
+}
+
+interface AgentMailErrorBody {
+  code?: string;
+  message?: string;
+  fix?: string;
+  limit?: number;
+}
+
+interface ListInboxesResponse {
+  inboxes?: AgentMailInbox[];
+  next_page_token?: string;
+}
+
+const AGENTMAIL_API = "https://api.agentmail.to/v0";
+
+function authHeaders(apiKey: string): HeadersInit {
+  return {
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+  };
+}
+
+async function listAllInboxes(apiKey: string): Promise<AgentMailInbox[]> {
+  const collected: AgentMailInbox[] = [];
+  let pageToken: string | undefined;
+
+  for (let page = 0; page < 10; page += 1) {
+    const url = new URL(`${AGENTMAIL_API}/inboxes`);
+    url.searchParams.set("limit", "100");
+    if (pageToken) {
+      url.searchParams.set("page_token", pageToken);
+    }
+
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (!response.ok) {
+      break;
+    }
+
+    const payload = (await response.json()) as ListInboxesResponse;
+    collected.push(...(payload.inboxes ?? []));
+    pageToken = payload.next_page_token;
+    if (!pageToken) {
+      break;
+    }
+  }
+
+  return collected;
+}
+
+function parseAgentMailError(body: string): AgentMailErrorBody {
+  try {
+    return JSON.parse(body) as AgentMailErrorBody;
+  } catch {
+    return { message: body.slice(0, 280) };
+  }
+}
+
+function formatFailureMessage(status: number, body: string): string {
+  const parsed = parseAgentMailError(body);
+  if (parsed.code === "limit_exceeded") {
+    const limitNote =
+      typeof parsed.limit === "number" ? ` (plan limit: ${parsed.limit} inboxes)` : "";
+    return (
+      parsed.fix ??
+      `AgentMail inbox limit reached${limitNote}. Delete unused inboxes at console.agentmail.to, or set AGENTMAIL_FALLBACK_INBOX_ID and AGENTMAIL_FALLBACK_INBOX_EMAIL on Convex to reuse one inbox for demos.`
+    );
+  }
+  if (parsed.fix) {
+    return parsed.fix;
+  }
+  if (parsed.message) {
+    return `AgentMail inbox provisioning failed (${status}): ${parsed.message}`;
+  }
+  return `AgentMail inbox provisioning failed (${status}).`;
 }
 
 export const provisionProjectInbox = internalAction({
@@ -24,15 +104,55 @@ export const provisionProjectInbox = internalAction({
       return null;
     }
 
+    const project = await ctx.runQuery(internal.projects.getInternal, {
+      projectId: args.projectId,
+    });
+    if (project?.inboxId && project.inboxEmail) {
+      return null;
+    }
+
     const clientId = `greenlight-${args.projectId}`;
-    const response = await fetch("https://api.agentmail.to/v0/inboxes", {
+    const existingInboxes = await listAllInboxes(apiKey);
+    const matched = existingInboxes.find(
+      (inbox) =>
+        inbox.client_id === clientId ||
+        inbox.metadata?.projectId === args.projectId,
+    );
+    if (matched) {
+      await ctx.runMutation(internal.projects.setInboxInternal, {
+        projectId: args.projectId,
+        inboxId: matched.inbox_id,
+        inboxEmail: matched.email,
+      });
+      await ctx.runMutation(internal.projects.appendEventInternal, {
+        projectId: args.projectId,
+        type: "inbox.provisioned",
+        message: `Linked existing AgentMail inbox ${matched.email}.`,
+      });
+      return null;
+    }
+
+    const fallbackInboxId = process.env.AGENTMAIL_FALLBACK_INBOX_ID?.trim();
+    const fallbackInboxEmail = process.env.AGENTMAIL_FALLBACK_INBOX_EMAIL?.trim();
+    if (fallbackInboxId && fallbackInboxEmail) {
+      await ctx.runMutation(internal.projects.setInboxInternal, {
+        projectId: args.projectId,
+        inboxId: fallbackInboxId,
+        inboxEmail: fallbackInboxEmail,
+      });
+      await ctx.runMutation(internal.projects.appendEventInternal, {
+        projectId: args.projectId,
+        type: "inbox.provisioned",
+        message: `Using shared AgentMail inbox ${fallbackInboxEmail} (fallback). Outbound mail still requires your approval.`,
+      });
+      return null;
+    }
+
+    const response = await fetch(`${AGENTMAIL_API}/inboxes`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: authHeaders(apiKey),
       body: JSON.stringify({
-        username: `greenlight-${args.projectId.slice(-8)}`,
+        username: `gl-${args.projectId.slice(-10)}`,
         display_name: "Greenlight Project Inbox",
         client_id: clientId,
         metadata: { projectId: args.projectId },
@@ -41,12 +161,34 @@ export const provisionProjectInbox = internalAction({
 
     if (!response.ok) {
       const body = await response.text();
+      const parsed = parseAgentMailError(body);
+
+      if (parsed.code === "limit_exceeded" && existingInboxes.length > 0) {
+        const reuse = existingInboxes[0];
+        if (reuse) {
+          await ctx.runMutation(internal.projects.setInboxInternal, {
+            projectId: args.projectId,
+            inboxId: reuse.inbox_id,
+            inboxEmail: reuse.email,
+          });
+          await ctx.runMutation(internal.projects.appendEventInternal, {
+            projectId: args.projectId,
+            type: "inbox.provisioned",
+            message: `Linked existing AgentMail inbox ${reuse.email} — new inbox creation is blocked by your plan limit.`,
+          });
+          return null;
+        }
+      }
+
+      const message = formatFailureMessage(response.status, body);
+
       await ctx.runMutation(internal.projects.appendEventInternal, {
         projectId: args.projectId,
         type: "inbox.failed",
-        message: `AgentMail inbox provisioning failed (${response.status}).`,
+        message,
       });
-      throw new Error(`AgentMail inbox error: ${body}`);
+
+      return null;
     }
 
     const inbox = (await response.json()) as AgentMailInbox;
@@ -90,26 +232,34 @@ export const sendApprovedEmail = internalAction({
       return null;
     }
 
-    const project = await ctx.runQuery(internal.projects.getInternal, {
+    let project = await ctx.runQuery(internal.projects.getInternal, {
       projectId: approval.projectId,
     });
+
+    if (!project?.inboxId) {
+      await ctx.runAction(internal.integrations.agentmailActions.provisionProjectInbox, {
+        projectId: approval.projectId,
+      });
+      project = await ctx.runQuery(internal.projects.getInternal, {
+        projectId: approval.projectId,
+      });
+    }
+
     if (!project?.inboxId) {
       await ctx.runMutation(internal.approvals.revertToPendingInternal, {
         approvalId: args.approvalId,
-        reason: "Email send failed: project inbox is not provisioned.",
+        reason:
+          "Email send failed: project inbox is not provisioned. Open Activity → Retry inbox setup, or set AGENTMAIL_FALLBACK_INBOX_* on Convex.",
       });
       throw new Error("Project inbox is not provisioned");
     }
 
     try {
       const response = await fetch(
-        `https://api.agentmail.to/v0/inboxes/${encodeURIComponent(project.inboxId)}/messages/send`,
+        `${AGENTMAIL_API}/inboxes/${encodeURIComponent(project.inboxId)}/messages/send`,
         {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
+          headers: authHeaders(apiKey),
           body: JSON.stringify({
             to: approval.toAddresses,
             subject: approval.subject,

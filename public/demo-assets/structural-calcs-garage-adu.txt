@@ -1,0 +1,16 @@
+STRUCTURAL CALCULATIONS — GARAGE ADU CONVERSION
+1448 Alvarado St, Los Angeles, CA 90026
+Prepared for: Garage to ADU conversion permit submittal
+
+SCOPE
+Existing garage roof framing and east load-bearing wall to remain with new opening header.
+Engineering calcs include ridge beam check, shear wall at north elevation, and foundation hold-downs.
+
+DESIGN CRITERIA
+2022 California Building Code | LADBS residential plan check
+Roof live load: 20 psf
+Floor dead load: 15 psf garage conversion zone
+
+SUMMARY
+Load-bearing garage wall reinforced for new 10'-0" opening; existing structure braced per calc package.
+Structural calculations complete for plan check review.

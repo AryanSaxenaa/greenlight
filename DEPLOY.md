@@ -24,6 +24,16 @@ Or for production: `npm run deploy` (requires confirming prod push in terminal).
 ```bash
 npx convex env set AGENTMAIL_API_KEY am_your_key
 npx convex env set AGENTMAIL_WEBHOOK_SECRET whsec_your_secret
+
+If per-project inbox creation hits **limit_exceeded** (common on free tiers even after deleting inboxes), reuse one inbox for demos:
+
+```bash
+# From AgentMail dashboard → inbox details (inbox_id + email address)
+npx convex env set AGENTMAIL_FALLBACK_INBOX_ID inbox_...
+npx convex env set AGENTMAIL_FALLBACK_INBOX_EMAIL you@agentmail.to
+```
+
+Greenlight will attach that inbox to projects instead of creating a new one. Use the **same API key** as the AgentMail account where you manage inboxes.
 npx convex env set FIRECRAWL_API_KEY fc_your_key
 npx convex env set FIRECRAWL_WEBHOOK_SECRET choose-a-long-random-string
 ```

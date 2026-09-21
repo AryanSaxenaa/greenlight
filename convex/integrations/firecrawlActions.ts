@@ -5,7 +5,7 @@ import { Firecrawl } from "firecrawl";
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import { internalAction } from "../_generated/server";
-import { isGenericPlanningHomepage, normalizeSourceUrl } from "../lib/sources";
+import { isGenericPlanningHomepage, LADBS_ADU_REFERENCE_MARKDOWN, normalizeSourceUrl } from "../lib/sources";
 export const scrapeProjectSources = internalAction({
   args: { projectId: v.id("projects") },
   returns: v.null(),
@@ -170,6 +170,36 @@ export const scrapeProjectSources = internalAction({
         } catch (error) {
           const message =
             error instanceof Error ? error.message : "Unknown scrape error";
+
+          if (source.key === "ladbs_adu") {
+            const preview = LADBS_ADU_REFERENCE_MARKDOWN.slice(0, 8000);
+            const contentHash = createHash("sha256").update(preview).digest("hex");
+            const storageId = await ctx.storage.store(
+              new Blob([LADBS_ADU_REFERENCE_MARKDOWN], { type: "text/markdown" }),
+            );
+
+            await ctx.runMutation(internal.sources.storeSnapshot, {
+              sourceId: source._id,
+              projectId: args.projectId,
+              title: "LADBS ADU permitting (reference)",
+              contentHash,
+              markdownPreview: preview,
+              storageId,
+              changeStatus: "reference_fallback",
+            });
+
+            retrievedCount += 1;
+
+            await ctx.runMutation(internal.projects.appendEventInternal, {
+              projectId: args.projectId,
+              type: "source.scraped",
+              message: `${source.label}: live scrape blocked (${message.slice(0, 120)}); stored official ADU reference excerpt.`,
+              actorType: "agent",
+              actorLabel: "Firecrawl",
+            });
+            continue;
+          }
+
           await ctx.runMutation(internal.sources.markUnreachable, {
             sourceId: source._id,
           });

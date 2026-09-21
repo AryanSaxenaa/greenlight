@@ -13,7 +13,7 @@ import {
   parseOfficialLookups,
 } from "./lib/officialLookup";
 import { requirementNodeKeysForDocumentType } from "./lib/documentExtraction";
-import { applyEvidenceStatusForRequirement } from "./lib/evidenceStatus";
+import { applyDerivedEvidenceUpdates, applyEvidenceStatusForRequirement } from "./lib/evidenceStatus";
 import { completeAgentRun, startAgentRun } from "./lib/agentRuns";
 
 const requirementListItem = v.object({
@@ -346,6 +346,8 @@ async function relinkDocumentEvidence(
 
     await applyEvidenceStatusForRequirement(ctx, requirement, nodeKey);
   }
+
+  await applyDerivedEvidenceUpdates(ctx, args.projectId, args.documentId, args.facts, requirements);
 }
 
 async function upsertRequirementsFromRows(

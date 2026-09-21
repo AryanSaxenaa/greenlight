@@ -12,6 +12,8 @@ import {
   ProjectWorkspaceTabs,
 } from "../components/ProjectCommandStrip";
 import { ProjectPermitGraph, type PermitGraphNode } from "../components/ProjectPermitGraph";
+import { ProjectDependencyNetwork } from "../components/ProjectDependencyNetwork";
+import { EvidenceImpactSummary } from "../components/EvidenceImpactSummary";
 import { QueryErrorBoundary } from "../components/QueryErrorBoundary";
 import { authRedirectPath } from "../lib/authRedirect";
 import { eventTone, formatEventMessage } from "../lib/eventMessages";
@@ -91,6 +93,9 @@ function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
   const applyChange = useMutation(api.parameters.applyChange);
   const rejectChange = useMutation(api.parameters.rejectChange);
   const repairGraph = useMutation(api.projects.repairGraph);
+  const refreshAgencySources = useMutation(api.projects.refreshAgencySources);
+  const loadDemoBundle = useMutation(api.projects.loadDemoBundle);
+  const retryAgentMailInbox = useMutation(api.projects.retryAgentMailInbox);
 
   const [uploading, setUploading] = useState(false);
   const [actionPending, setActionPending] = useState(false);
@@ -147,6 +152,50 @@ function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
     selectedSnapshot ? { snapshotId: selectedSnapshot._id } : "skip",
   );
 
+  const agentMailStatus = useMemo(() => {
+    const project = data?.project;
+    const events = data?.events ?? [];
+    if (!project) {
+      return {
+        tone: "idle" as const,
+        title: "AgentMail idle",
+        detail: "Loading project…",
+      };
+    }
+
+    if (project.inboxEmail) {
+      return {
+        tone: "ready" as const,
+        title: "Project inbox ready",
+        detail: `${project.inboxEmail} — approve a draft in Pending approvals to send via AgentMail.`,
+      };
+    }
+
+    const inboxEvent = events.find((event) => event.type.startsWith("inbox."));
+    if (inboxEvent?.type === "inbox.skipped") {
+      return {
+        tone: "skipped" as const,
+        title: "AgentMail not configured",
+        detail:
+          "Set AGENTMAIL_API_KEY on the Convex deployment to provision per-project inboxes.",
+      };
+    }
+    if (inboxEvent?.type === "inbox.failed") {
+      return {
+        tone: "failed" as const,
+        title: "Inbox provisioning failed",
+        detail: inboxEvent.message,
+      };
+    }
+
+    return {
+      tone: "idle" as const,
+      title: "AgentMail idle",
+      detail:
+        "No inbox yet. Drafts appear under Pending approvals after you request agency clarification.",
+    };
+  }, [data?.events, data?.project]);
+
   if (data === undefined) {
     return (
       <AppPageLayout wide>
@@ -181,13 +230,18 @@ function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
           status: node.status,
           isPrimaryBlocker: node.isPrimaryBlocker,
           sourceLabel: node.sourceLabel,
+          blockedReason:
+            sortedRequirements.find((item) => item.nodeKey === node.nodeKey)?.blockedReason ??
+            node.sourceExcerpt,
         }))
       : sortedRequirements.map((requirement) => ({
           nodeKey: requirement.nodeKey,
           title: requirement.title,
           status: requirement.status,
           isPrimaryBlocker: requirement.isPrimaryBlocker,
+          blockedReason: requirement.blockedReason,
         }));
+  const graphEdges = graph?.edges ?? [];
   const eligibleRequirements = sortedRequirements.filter(
     (requirement) => requirement.status !== "locked",
   );
@@ -331,13 +385,14 @@ function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
         <div className="project-workspace-panel" role="tabpanel">
           {workspaceTab === "overview" ? (
             <div className="project-overview-grid">
-              <ProjectPermitGraph
-                variant="light"
-                compact
-                nodes={displayGraphNodes}
-                loading={graphLoading}
-                readinessPercent={project.readinessPercent}
-              />
+              <div className="project-overview-main">
+                <ProjectPermitGraph
+                  variant="light"
+                  nodes={displayGraphNodes}
+                  loading={graphLoading}
+                  readinessPercent={project.readinessPercent}
+                />
+              </div>
 
               <div className="project-overview-side">
                 <ControlRoomCompiler
@@ -366,12 +421,60 @@ function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
                     ))}
                   </div>
                 </DashDisclosure>
+
+                <ProjectDependencyNetwork
+                  nodes={displayGraphNodes}
+                  edges={graphEdges}
+                  loading={graphLoading}
+                />
               </div>
             </div>
           ) : null}
 
           {workspaceTab === "evidence" ? (
             <div className="project-stack">
+              <EvidenceImpactSummary
+                documents={documents ?? []}
+                evidenceLinks={evidenceLinks ?? []}
+                requirements={sortedRequirements}
+              />
+
+              <DashSection variant="module" kicker="Demo" title="1448 Alvarado demo bundle">
+                <p className="muted">
+                  Loads a detailed site plan (rear setback 4 ft, height, zoning) and structural
+                  calculations, provisions AgentMail, and queues a parking clarification draft.
+                </p>
+                <div className="cta-row evidence-demo-actions">
+                  <button
+                    className="button dash-button-primary"
+                    type="button"
+                    disabled={actionPending}
+                    onClick={() =>
+                      void runAction(async () => {
+                        await loadDemoBundle({ projectId });
+                        setWorkspaceTab("overview");
+                      })
+                    }
+                  >
+                    Load demo bundle
+                  </button>
+                  <a
+                    className="button dash-button-secondary"
+                    href="/demo-assets/site-plan-garage-adu-detailed.txt"
+                    download
+                  >
+                    Download site plan
+                  </a>
+                  <a
+                    className="button dash-button-secondary"
+                    href="/demo-assets/structural-calcs-garage-adu.txt"
+                    download
+                  >
+                    Download structural
+                  </a>
+                </div>
+              </DashSection>
+
               <DashSection variant="module" kicker="Evidence" title="Upload documents">
                 <form className="evidence-upload-form" onSubmit={onUpload}>
                   <div className="evidence-upload-row">
@@ -533,6 +636,25 @@ function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
           {workspaceTab === "sources" ? (
             <div className="project-stack">
               <DashSection kicker="Official sources" title="Agency research">
+                <p className="muted">
+                  LADBS ADU pages often block automated scrapers (403). Greenlight stores a
+                  reference snapshot when live scrape fails, or refreshes from LA Housing ADU
+                  guidance when available.
+                </p>
+                <div className="cta-row" style={{ marginBottom: "0.75rem" }}>
+                  <button
+                    className="button dash-button-secondary"
+                    type="button"
+                    disabled={actionPending}
+                    onClick={() =>
+                      void runAction(async () => {
+                        await refreshAgencySources({ projectId });
+                      })
+                    }
+                  >
+                    Refresh agency sources
+                  </button>
+                </div>
                 <div className="source-list">
                   {sources?.sources.map((source) => {
                     const snapshot = sources.snapshots.find(
@@ -591,6 +713,37 @@ function ProjectPageContent({ projectId }: { projectId: Id<"projects"> }) {
 
           {workspaceTab === "activity" ? (
             <div className="project-activity-grid">
+              <DashDisclosure
+                title="AgentMail & correspondence"
+                meta={agentMailStatus.tone === "ready" ? "inbox ready" : agentMailStatus.tone}
+                defaultOpen
+              >
+                <div className={`agentmail-status agentmail-status-${agentMailStatus.tone}`}>
+                  <strong>{agentMailStatus.title}</strong>
+                  <p className="muted">{agentMailStatus.detail}</p>
+                  <p className="muted">
+                    AgentMail only sends after you click <span className="mono">Approve & send</span>{" "}
+                    on a pending draft. Inbound agency replies sync back through the webhook.
+                  </p>
+                  {agentMailStatus.tone !== "ready" ? (
+                    <div className="cta-row">
+                      <button
+                        className="button dash-button-secondary"
+                        type="button"
+                        disabled={actionPending}
+                        onClick={() =>
+                          void runAction(async () => {
+                            await retryAgentMailInbox({ projectId });
+                          })
+                        }
+                      >
+                        Retry inbox setup
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </DashDisclosure>
+
               <DashDisclosure
                 title="Pending approvals"
                 meta={`${pendingApprovalCount} waiting`}

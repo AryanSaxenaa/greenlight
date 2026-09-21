@@ -3,7 +3,8 @@ import { internalMutation, internalQuery, mutation, query } from "./_generated/s
 import { v } from "convex/values";
 import { getCurrentUser, requireProjectAccess } from "./lib/auth";
 import { appendEvent, recomputeProjectMetrics } from "./lib/compiler";
-import { applyEvidenceStatusForRequirement } from "./lib/evidenceStatus";
+import { extractFactsFromText, requirementNodeKeysForDocumentType } from "./lib/documentExtraction";
+import { applyDerivedEvidenceUpdates, applyEvidenceStatusForRequirement } from "./lib/evidenceStatus";
 
 const factValidator = v.object({
   label: v.string(),
@@ -180,6 +181,14 @@ export const applyExtractionInternal = internalMutation({
       await applyEvidenceStatusForRequirement(ctx, requirement, nodeKey);
     }
 
+    await applyDerivedEvidenceUpdates(
+      ctx,
+      args.projectId,
+      args.documentId,
+      args.facts,
+      requirements,
+    );
+
     await ctx.runMutation(internal.requirements.applyOfficialLookupsInternal, {
       projectId: args.projectId,
     });
@@ -195,5 +204,46 @@ export const applyExtractionInternal = internalMutation({
     );
 
     return null;
+  },
+});
+
+export const ingestDemoDocumentInternal = internalMutation({
+  args: {
+    projectId: v.id("projects"),
+    userId: v.id("users"),
+    storageId: v.id("_storage"),
+    filename: v.string(),
+    mimeType: v.string(),
+    documentType: v.string(),
+    textContent: v.string(),
+  },
+  returns: v.id("documents"),
+  handler: async (ctx, args) => {
+    const facts = extractFactsFromText(
+      args.textContent,
+      args.documentType,
+      args.filename,
+    );
+    const nodeKeys = requirementNodeKeysForDocumentType(args.documentType);
+
+    const documentId = await ctx.db.insert("documents", {
+      projectId: args.projectId,
+      storageId: args.storageId,
+      filename: args.filename,
+      mimeType: args.mimeType,
+      documentType: args.documentType,
+      uploadedBy: args.userId,
+      extractedFacts: facts,
+      createdAt: Date.now(),
+    });
+
+    await ctx.runMutation(internal.documents.applyExtractionInternal, {
+      documentId,
+      projectId: args.projectId,
+      facts,
+      nodeKeys,
+    });
+
+    return documentId;
   },
 });

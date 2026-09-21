@@ -159,6 +159,98 @@ export const repairGraph = mutation({
       projectId: args.projectId,
     });
 
+    await ctx.runMutation(internal.sources.seedOfficialSources, {
+      projectId: args.projectId,
+    });
+
+    return null;
+  },
+});
+
+export const refreshAgencySources = mutation({
+  args: { projectId: v.id("projects") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireProjectAccess(ctx, args.projectId);
+
+    await ctx.runMutation(internal.sources.seedOfficialSources, {
+      projectId: args.projectId,
+    });
+
+    await appendEvent(
+      ctx,
+      args.projectId,
+      "source.refresh_started",
+      "Re-scraping official LA permitting sources.",
+      { actorType: "user", actorLabel: "User" },
+    );
+
+    await ctx.scheduler.runAfter(0, internal.integrations.firecrawlActions.scrapeProjectSources, {
+      projectId: args.projectId,
+    });
+
+    return null;
+  },
+});
+
+export const retryAgentMailInbox = mutation({
+  args: { projectId: v.id("projects") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireProjectAccess(ctx, args.projectId);
+
+    await appendEvent(
+      ctx,
+      args.projectId,
+      "inbox.retry",
+      "Retrying AgentMail inbox setup (reuse existing inbox or fallback if configured).",
+      { actorType: "user", actorLabel: "User" },
+    );
+
+    await ctx.scheduler.runAfter(
+      0,
+      internal.integrations.agentmailActions.provisionProjectInbox,
+      { projectId: args.projectId },
+    );
+
+    return null;
+  },
+});
+
+export const loadDemoBundle = mutation({
+  args: { projectId: v.id("projects") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const { user } = await requireProjectAccess(ctx, args.projectId);
+
+    await appendEvent(
+      ctx,
+      args.projectId,
+      "demo.bundle_started",
+      "Loading demo site plan, structural package, and AgentMail setup.",
+      { actorType: "user", actorLabel: user.email ?? "User" },
+    );
+
+    await ctx.scheduler.runAfter(0, internal.demoBootstrap.applyDemoBundleInternal, {
+      projectId: args.projectId,
+      userId: user._id,
+    });
+
+    return null;
+  },
+});
+
+export const recordDemoBundleEventInternal = internalMutation({
+  args: { projectId: v.id("projects") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await appendEvent(
+      ctx,
+      args.projectId,
+      "demo.bundle_loaded",
+      "Demo site plan and structural package loaded. Setback cleared from plan dimensions; AgentMail inbox provision attempted; parking clarification draft queued.",
+      { actorType: "agent", actorLabel: "Demo bootstrap" },
+    );
     return null;
   },
 });

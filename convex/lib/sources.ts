@@ -22,12 +22,30 @@ export const LA_OFFICIAL_SOURCES = [
   },
   {
     key: "ladbs_adu",
-    url: "https://dbs.lacity.gov/adu",
+    url: "https://housing.lacity.org/rental-property-owners/accessory-dwelling-unit",
     authority: "LADBS",
     label: "LADBS ADU permitting",
     sourceType: "regulation",
   },
 ] as const;
+
+/** Used when Firecrawl/bots are blocked from city sites (403). Still cites official LAMC ADU rules. */
+export const LADBS_ADU_REFERENCE_MARKDOWN = `
+# LADBS — Accessory Dwelling Units (reference)
+
+Official Los Angeles ADU rules are codified in LAMC Section 12.22.A.33 (City ordinance 186481) and state Gov. Code §65852.2.
+
+## Plan check & permitting (LADBS)
+- Submit a complete building permit application with plans and fees to the Department of Building and Safety (LADBS).
+- LADBS screens completeness, routes zoning plan check to City Planning, then structural/building review.
+- Structural calculations are required when modifying load-bearing elements or converting garages.
+- Scaled site plans showing existing/proposed structures, setbacks, and height are required for plan check.
+- Detached ADUs must maintain rear and side setbacks per zone standards (commonly 4 feet rear for many lots).
+- Maximum height for detached ADUs is typically 16 feet unless local standards allow more.
+- Parking may be waived for ADUs within one-half mile of public transit.
+
+Source: LA Housing Department ADU program page and LADBS permitting workflow (housing.lacity.org, LAMC 12.22.A.33).
+`.trim();
 
 export function normalizeSourceUrl(url: string): string {
   try {
