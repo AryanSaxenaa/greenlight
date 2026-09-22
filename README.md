@@ -212,12 +212,22 @@ Greenlight is a **full-stack permitting workflow**, not a chatbot over static PD
 
 ### Suggested demo flow (~5 min)
 
-1. Sign up and create an **ADU project** at a Los Angeles address (e.g. `1234 Sunset Blvd, Los Angeles, CA 90026`).
-2. Watch the **compiler** on Convex: Firecrawl sources populate, OpenAI extracts requirements, readiness updates live.
-3. Open **Change impact**, propose an ADU height change, review affected requirements, apply or reject.
-4. Upload a document (site plan or survey); OpenAI extracts facts mapped to requirements.
-5. When a blocker triggers a draft, **approve the OpenAI-drafted clarification** (AgentMail sends to configured test recipient).
-6. Simulate an agency reply via AgentMail webhook and watch the **inbox and event stream** update on Convex.
+**Fast path (hackathon video):**
+
+1. Sign in at https://handsome-bison-608.convex.site/auth  
+2. Create an **ADU / garage conversion** project at **`1448 Alvarado St, Los Angeles, CA 90026`** (or open an existing one).  
+3. **Overview** — watch compiler stages, permit pathway graph, readiness %, and dependency network under Project parameters.  
+4. **Evidence → Load demo bundle** — loads detailed site plan + structural package, provisions AgentMail, queues a clarification draft.  
+5. **Activity** — confirm **Project inbox ready**, then **Approve & send** on the pending draft.  
+6. **Sources** — official LA rows (Firecrawl); use **Refresh agency sources** if any row is stale.  
+
+**Extended path:**
+
+- Manual upload from `/demo-assets/*.txt` (Site plan + Structural calculations)  
+- **Change impact** — propose ADU height `18` and apply/reject  
+- Simulate inbound agency reply via AgentMail webhook → **Activity** updates live  
+
+See `video/DEMO-MATERIALS.md` and `video/VOICEOVER-SCRIPT.md` for recording scripts.
 
 ---
 
@@ -265,6 +275,7 @@ Put secrets in **`.env.local` only** (never commit). For cloud deploys, also run
 | `FIRECRAWL_API_KEY` | Scrape and monitor official permit sources |
 | `AGENTMAIL_API_KEY` | Provision inboxes and send outbound mail |
 | `AGENTMAIL_WEBHOOK_SECRET` | Verify inbound `message.received` webhooks |
+| `AGENTMAIL_FALLBACK_INBOX_ID` / `AGENTMAIL_FALLBACK_INBOX_EMAIL` | Optional — reuse one inbox when AgentMail plan limit blocks new inboxes |
 | `CLARIFICATION_TEST_RECIPIENT` | Email that receives demo clarification sends |
 
 See [DEPLOY.md](./DEPLOY.md) for production URLs, redeploy commands, and webhook setup.
@@ -303,6 +314,8 @@ npx @convex-dev/static-hosting upload --build  # build + upload frontend
 ```
 convex/           Backend — schema, queries, mutations, actions, HTTP routes
 src/              React frontend — pages, components, styles
+public/demo-assets/  Demo site plan + structural text (Evidence bundle)
+video/            Demo video scripts, Remotion intro, optional PDF assets
 PlanGreenlight.md Product specification (MVP + demo script §55)
 hackathon.md      Public build log
 DEPLOY.md         Deployment and webhook reference

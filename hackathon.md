@@ -13,7 +13,7 @@
 - **Auth:** Convex Auth
 - **AI models:** openai/gpt-4o-mini (Convex AI Gateway)
 - **Started:** 2026-09-19T10:33:06Z
-- **Last updated:** 2026-09-20T13:30:00Z
+- **Last updated:** 2026-09-21T23:15:00Z
 
 ## Log
 
@@ -41,5 +41,6 @@ Set Firecrawl + AgentMail API keys on cloud. Verified full §55 email loop on li
 ### 2026-09-20 - openai gateway
 Integrated Convex AI Gateway with `openai/gpt-4o-mini` for requirement extraction, inbound email parsing, clarification draft generation, and document fact extraction (`convex/integrations/openaiActions.ts`, `convex/lib/aiGateway.ts`). Compiler now schedules OpenAI extraction after Firecrawl scrape; regex/template fallbacks remain when gateway calls fail. Verified gateway connectivity with `integrations/openaiActions:testAiGateway`.
 
-### 2026-09-20 - aggressive ai testing
-Added `convex/testing/aggressiveSuite.ts` and ran full AI integration tests against live deployment (requirement extraction, email parse, clarification draft, document facts). Updated README and product copy across landing page, control room, and docs to highlight OpenAI via Convex AI Gateway.
+### 2026-09-21 - demo bundle + production polish
+Shipped **Load demo bundle** (1448 Alvarado site plan + structural text), derived setback/structural verification, resilient AgentMail inbox provisioning (reuse/fallback on plan limits), LADBS source URL + reference snapshot when city sites return 403, tabbed project workspace (Overview / Evidence / Sources / Activity), dependency network under Project parameters, and updated `video/*` scripts + README demo flow. Aggressive AI suite passes 10/10 on live deployment.
+
