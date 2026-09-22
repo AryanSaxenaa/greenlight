@@ -13,7 +13,7 @@
 - **Auth:** Convex Auth
 - **AI models:** openai/gpt-4o-mini (Convex AI Gateway)
 - **Started:** 2026-09-19T10:33:06Z
-- **Last updated:** 2026-09-21T23:15:00Z
+- **Last updated:** 2026-09-22T16:00:00Z
 
 ## Log
 
@@ -42,5 +42,8 @@ Set Firecrawl + AgentMail API keys on cloud. Verified full §55 email loop on li
 Integrated Convex AI Gateway with `openai/gpt-4o-mini` for requirement extraction, inbound email parsing, clarification draft generation, and document fact extraction (`convex/integrations/openaiActions.ts`, `convex/lib/aiGateway.ts`). Compiler now schedules OpenAI extraction after Firecrawl scrape; regex/template fallbacks remain when gateway calls fail. Verified gateway connectivity with `integrations/openaiActions:testAiGateway`.
 
 ### 2026-09-21 - demo bundle + production polish
-Shipped **Load demo bundle** (1448 Alvarado site plan + structural text), derived setback/structural verification, resilient AgentMail inbox provisioning (reuse/fallback on plan limits), LADBS source URL + reference snapshot when city sites return 403, tabbed project workspace (Overview / Evidence / Sources / Activity), dependency network under Project parameters, and updated `video/*` scripts + README demo flow. Aggressive AI suite passes 10/10 on live deployment.
+Shipped **Load demo bundle** (1448 Alvarado site plan + structural text), derived setback/structural verification, resilient AgentMail inbox provisioning (reuse/fallback on plan limits), LADBS source URL + reference snapshot when city sites return 403, tabbed project workspace (Overview / Evidence / Sources / Activity), dependency network under Project parameters, and updated README demo flow. Aggressive AI suite passes 10/10 on live deployment. Commits: `481f826`, `592af2b`, `4b99a4f`.
+
+### 2026-09-22 - deploy + submission prep
+Pushed backend and static site to https://handsome-bison-608.convex.site (`npx convex dev --once`, `@convex-dev/static-hosting upload --build`). Set `AGENTMAIL_API_KEY` and `AGENTMAIL_WEBHOOK_SECRET` on cloud; per-project inboxes provision with reuse when AgentMail plan limits apply. Added **Refresh agency sources**, React hooks fix on project page, and README submission-oriented demo steps (`b00dc56`). Demo video voiceover and vibeapps copy prepared locally (`video/`, gitignored). Pending: YouTube upload + vibeapps.dev submit + X post tagging sponsors.
 
